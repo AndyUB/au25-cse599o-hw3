@@ -19,7 +19,7 @@ import torch.optim as optim
 from torch.distributions import Categorical
 import tiktoken
 import time
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import numpy as np
 
 from cse599o_basics.model import TransformerLM
@@ -176,8 +176,7 @@ def run_training(num_steps: int = 10, num_workers: int = 1):
 
 def run_once(num_steps: int = 10, num_workers: int = 1):
     """Entry point for training."""
-    import asyncio
-    asyncio.run(run_training(num_steps, num_workers))
+    run_training(num_steps, num_workers)
 
 
 # ===================== Entry point =====================

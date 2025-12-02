@@ -196,6 +196,10 @@ class Generator:
         """
         self.generator_model.load_state_dict(state_dict)
 
+    def sync_generator(self) -> None:
+        if self.generator_device.type == "cuda":
+            torch.cuda.synchronize(self.generator_device)
+
 
 class Learner:
     """Base learner class for policy gradient updates using TransformerLM."""
@@ -349,6 +353,10 @@ class Learner:
         """
         return self.learner_model.state_dict()
 
+    def sync_learner(self) -> None:
+        if self.learner_device.type == "cuda":
+            torch.cuda.synchronize(self.learner_device)
+
 
 # ===================== Combined Actor =====================
 
@@ -362,21 +370,52 @@ class ColocatedWorker(Generator, Learner):
         Learner.__init__(self, ckpt_file=ckpt_file)
         self.steps_per_rollout = steps_per_rollout
         self.step_count = 0
+        self.time_stats: dict[str, float] = {
+            "rollout": 0.0,
+            "update": 0.0,
+            "transfer": 0.0,
+            "total": 0.0,
+        }
 
     def training_step(
         self, prompts: list[str], verbose: bool = False
     ) -> dict[str, Any]:
         """Perform one complete training step: generate rollout + update policy."""
+
         # Generate trajectories for the batch of prompts
+        self.sync_generator()
+        rollout_start = time.perf_counter()
         trajectories = self.generate_trajectories(prompts, verbose=verbose)
+        self.sync_generator()
+        rollout_end = time.perf_counter()
 
         # Update policy using GRPO
+        self.sync_learner()
+        update_start = time.perf_counter()
         loss = self.update_policy(trajectories, self.steps_per_rollout, verbose=verbose)
+        self.sync_learner()
+        update_end = time.perf_counter()
 
         # Sync weights
+        transfer_start = time.perf_counter()
         self.set_weights(self.get_weights())
+        self.sync_learner()
+        self.sync_generator()
+        transfer_end = time.perf_counter()
 
         self.step_count += 1
+
+        total_time_ms = (transfer_end - rollout_start) * 1000
+        rollout_time_ms = (rollout_end - rollout_start) * 1000
+        update_time_ms = (update_end - update_start) * 1000
+        transfer_time_ms = (transfer_end - transfer_start) * 1000
+        rollout_pct = rollout_time_ms / total_time_ms * 100
+        update_pct = update_time_ms / total_time_ms * 100
+        transfer_pct = transfer_time_ms / total_time_ms * 100
+        self.time_stats["total"] += total_time_ms
+        self.time_stats["rollout"] += rollout_time_ms
+        self.time_stats["update"] += update_time_ms
+        self.time_stats["transfer"] += transfer_time_ms
 
         return {
             "step": self.step_count,
@@ -387,10 +426,17 @@ class ColocatedWorker(Generator, Learner):
                 if trajectories
                 else 0.0
             ),
+            "total_time_ms": total_time_ms,
+            "rollout_time_ms": f"{rollout_time_ms} ({rollout_pct:.1f}%)",
+            "update_time_ms": f"{update_time_ms} ({update_pct:.1f}%)",
+            "transfer_time_ms": f"{transfer_time_ms} ({transfer_pct:.1f}%)",
         }
 
     def get_statistics(self) -> dict[str, Any]:
         """Get current training statistics."""
+        total_time = self.time_stats["total"]
+        time_stats_pct = {k: v / total_time * 100 for k, v in self.time_stats.items()}
+
         return {
             "step_count": self.step_count,
             "model_parameters": (
@@ -398,6 +444,8 @@ class ColocatedWorker(Generator, Learner):
                 if hasattr(self, "model")
                 else 0
             ),
+            "time_stats": self.time_stats,
+            "time_stats_pct": time_stats_pct,
         }
 
 

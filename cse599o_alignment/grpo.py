@@ -4,7 +4,6 @@ GRPO Algorithm Implementation - Assignment 3
 """
 
 import torch
-from einops import repeat
 from typing import Literal, Callable
 
 

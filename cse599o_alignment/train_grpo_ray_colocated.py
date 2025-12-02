@@ -19,7 +19,7 @@ from typing import Any
 import numpy as np
 
 from cse599o_basics.model import Transformer
-from cse599o_basics.optimizer import AdamW
+from cse599o_basics.optimizer import AdamW, gradient_clipping
 from cse599o_alignment.grpo import grpo_microbatch_train_step
 from cse599o_alignment.train_util import (
     extract_keywords_from_prompt,
@@ -48,6 +48,7 @@ ADAMW_ARGS = {
     "eps": 1e-8,
     "weight_decay": 0.01,
 }
+MAX_GRAD_NORM = 1.0
 
 N_GRPO_STEPS = 100
 G = 4  # group size (number of responses per prompt)
@@ -330,6 +331,9 @@ class Learner:
                 advantages=advantages.view(N * G, 1),
                 old_log_probs=old_log_probs.view(N * G, SAMPLING_MAX_TOKENS),
                 cliprange=CLIPRANGE,
+            )
+            gradient_clipping(
+                list(self.learner_model.parameters()), MAX_GRAD_NORM, verbose=verbose
             )
             self.learner_optimizer.step()
             if verbose:

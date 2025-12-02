@@ -98,3 +98,36 @@ class AdamW(torch.optim.Optimizer):
                     p.sub_(lr * weight_decay * p)
 
         return loss
+
+
+def gradient_clipping(
+    parameters: list[torch.nn.Parameter],
+    max_norm: float,
+    verbose: bool = False,
+) -> torch.Tensor:
+    """
+    Clip the gradients of the given parameters to have a maximum norm.
+
+    Args:
+        parameters: Iterable of model parameters.
+        max_norm (float): Maximum allowed norm of the gradients.
+    """
+
+    device = parameters[0].device
+    total = torch.zeros((), device=device)
+    for p in parameters:
+        p: torch.Tensor
+        g: torch.Tensor = p.grad
+        if g is not None:
+            total = total + torch.sum(g.detach().float().to(device) ** 2)
+    norm = torch.sqrt(total)
+
+    if norm >= max_norm:
+        if verbose:
+            print(f"Norm before grad clipping: {norm.item():.4f}")
+
+        eps = 1e-6
+        clip_coef = max_norm / (norm + eps)
+        for p in parameters:
+            if p.grad is not None:
+                p.grad.mul_(clip_coef)

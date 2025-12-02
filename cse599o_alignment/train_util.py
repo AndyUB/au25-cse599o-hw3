@@ -3,8 +3,8 @@ import torch
 from torch.distributions import Categorical
 
 
-KEYWORD_INCLUSION_PROMPT_PREFIX = "Write a story that includes the word(s): "
-KEYWORD_INCLUSION_PROMPT_SUFFIX = ". Response: "
+KEYWORD_INCLUSION_PROMPT_PREFIX = "Write a story that includes the word "
+KEYWORD_INCLUSION_PROMPT_SUFFIX = ". One day, "
 
 
 def make_keyword_inclusion_prompt(keywords: list[str]) -> str:

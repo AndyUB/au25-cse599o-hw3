@@ -1,4 +1,5 @@
 import tiktoken
+import numpy as np
 import torch
 from torch.distributions import Categorical
 
@@ -76,6 +77,18 @@ def keyword_inclusion_reward(
         "format_reward": 0.0,
         "answer_reward": answer_reward,
     }
+
+
+def set_seed(seed: int = 599) -> None:
+    """
+    Set the random seed for reproducibility.
+
+    Args:
+        seed (int): The seed value to set.
+    """
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
 
 
 @torch.no_grad()

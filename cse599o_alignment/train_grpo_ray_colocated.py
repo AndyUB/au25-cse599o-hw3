@@ -20,12 +20,13 @@ import numpy as np
 
 from cse599o_basics.model import Transformer
 from cse599o_basics.optimizer import AdamW, gradient_clipping
-from cse599o_alignment.grpo import grpo_microbatch_train_step
+from cse599o_alignment.grpo import grpo_microbatch_train_step, kl_divergence
 from cse599o_alignment.train_util import (
     extract_keywords_from_prompt,
     generate_response,
     keyword_inclusion_reward,
     make_keyword_inclusion_prompt,
+    set_seed,
 )
 
 
@@ -94,6 +95,72 @@ class Trajectory:
         self.rewards = rewards
         self.log_probs = log_probs
         self.response_masks = response_masks
+        # Lazily computed input IDs (prompt + responses)
+        self._input_ids: torch.Tensor | None = None  # (G, prompt_len + sequence_length)
+
+    def get_input_ids(
+        self, tokenizer: tiktoken.Encoding, device: torch.device
+    ) -> torch.Tensor:
+        """
+        Get input IDs combining prompt and responses.
+
+        Args:
+            tokenizer: Tokenizer to encode the prompt.
+            device: Device for the returned tensor.
+
+        Returns:
+            torch.Tensor: Input IDs tensor of shape (G, prompt_len + sequence_length).
+        """
+        if self._input_ids is None:
+            prompt_tokens = tokenizer.encode(self.prompt)
+            prompt_ids = torch.tensor(
+                [prompt_tokens] * G, device=device
+            )  # (G, prompt_len)
+            self._input_ids = torch.cat(
+                [prompt_ids, self.responses], dim=1
+            )  # (G, prompt_len + sequence_length)
+
+        return torch.clone(self._input_ids.detach()).to(device)
+
+
+def compute_log_probs(
+    model: torch.nn.Module,
+    tokenizer: tiktoken.Encoding,
+    trajectories: list[Trajectory],
+    device: torch.device,
+) -> torch.Tensor:
+    """
+    Compute log probabilities for generated tokens in trajectories.
+
+    Args:
+        model (torch.nn.Module): The language model for computing log probabilities.
+        tokenizer (tiktoken.Encoding): The tokenizer for encoding/decoding text.
+        trajectories (list[Trajectory]): List of Trajectory objects.
+        device (torch.device): Device for computation.
+
+    Returns:
+        torch.Tensor: Log probabilities tensor of shape
+            (num_trajectories, G, sequence_length).
+    """
+    log_probs_list: list[torch.Tensor] = []
+    for traj in trajectories:
+        input_ids = traj.get_input_ids(tokenizer, device)  # (G, prompt_len + seq_len)
+        prompt_len = input_ids.shape[1] - SAMPLING_MAX_TOKENS
+        logits = model(input_ids)  # (G, prompt_len + seq_len, vocab_size)
+        generated_token_logits = logits[
+            :, prompt_len - 1 : -1, :
+        ]  # (G, seq_len, vocab_size)
+        scaled_logits = generated_token_logits / SAMPLING_TEMPERATURE
+        log_probs_vocab = torch.log_softmax(
+            scaled_logits, dim=-1
+        )  # (G, seq_len, vocab_size)
+        log_probs = torch.gather(
+            log_probs_vocab, dim=2, index=traj.responses.unsqueeze(-1)
+        ).squeeze(
+            -1
+        )  # (G, seq_len)
+        log_probs_list.append(log_probs)
+    return torch.stack(log_probs_list)  # (N, G, seq_len)
 
 
 # ===================== Base classes (no @ray.remote) =====================
@@ -263,38 +330,20 @@ class Learner:
             torch.Tensor: Policy log probabilities tensor of shape
                 (num_trajectories, G, sequence_length).
         """
-        policy_log_probs_list: list[torch.Tensor] = []
-        for traj in trajectories:
-            prompt_tokens = self.learner_tokenizer.encode(traj.prompt)
-            prompt_len = len(prompt_tokens)
-            prompt_ids = torch.tensor(
-                [prompt_tokens] * G, device=self.learner_device
-            )  # (G, prompt_len)
-            input_ids = torch.cat(
-                [prompt_ids, traj.responses], dim=1
-            )  # (G, prompt_len + seq_len)
-            logits = self.learner_model(
-                input_ids
-            )  # (G, prompt_len + seq_len, vocab_size)
-            generated_token_logits = logits[
-                :, prompt_len - 1 : -1, :
-            ]  # (G, seq_len, vocab_size)
-            scaled_logits = generated_token_logits / SAMPLING_TEMPERATURE
-            log_probs_vocab = torch.log_softmax(
-                scaled_logits, dim=-1
-            )  # (G, seq_len, vocab_size)
-            policy_log_probs = torch.gather(
-                log_probs_vocab, dim=2, index=traj.responses.unsqueeze(-1)
-            ).squeeze(
-                -1
-            )  # (G, seq_len)
-            policy_log_probs_list.append(policy_log_probs)
-        return torch.stack(policy_log_probs_list)  # (N, G, sequence_length)
+        policy_log_probs = compute_log_probs(
+            self.learner_model,
+            self.learner_tokenizer,
+            trajectories,
+            self.learner_device,
+        )  # (N, G, seq_len)
+        return policy_log_probs
 
     def update_policy(
         self,
         trajectories: list[Trajectory],
         steps_per_rollout: int = 1,
+        monitor_kl: bool = False,
+        ref_log_probs: torch.Tensor | None = None,
         verbose: bool = False,
     ) -> float:
         """
@@ -303,6 +352,9 @@ class Learner:
         Args:
             trajectories (list[Trajectory]): Rollout trajectories.
             steps_per_rollout (int): Number of training steps per rollout batch.
+            monitor_kl (bool): Whether to monitor KL divergence.
+            ref_log_probs (torch.Tensor | None): Reference log probabilities for KL computation.
+                Required if monitor_kl is True. Shape (num_trajectories, G, sequence_length).
             verbose (bool): Whether to enable verbose logging.
 
         Returns:
@@ -313,6 +365,9 @@ class Learner:
         # 2. Compute policy gradient loss
         # 3. Perform optimizer step
         # 4. Return loss value
+        if monitor_kl and ref_log_probs is None:
+            raise ValueError("ref_log_probs must be provided when monitor_kl is True")
+
         N = len(trajectories)
         advantages = self.compute_advantages(trajectories)  # (N, G)
         old_log_probs = torch.stack(
@@ -322,6 +377,7 @@ class Learner:
             [traj.response_masks for traj in trajectories]
         )  # (N, G, seq_len)
 
+        total_loss = 0.0
         for step in range(steps_per_rollout):
             self.learner_optimizer.zero_grad()
             policy_log_probs = self.get_policy_log_probs(
@@ -340,9 +396,30 @@ class Learner:
                 list(self.learner_model.parameters()), MAX_GRAD_NORM, verbose=verbose
             )
             self.learner_optimizer.step()
+
+            total_loss += loss.item()
             if verbose:
-                print(f"Step {step}, Loss: {loss.item()}")
-        return float(loss.item())
+                print(f"Microstep {step}, Loss: {loss.item()}")
+
+        if monitor_kl:
+            final_policy_log_probs = self.get_policy_log_probs(
+                trajectories
+            )  # (N, G, seq_len)
+            kl_ref = kl_divergence(
+                final_policy_log_probs.view(N * G, SAMPLING_MAX_TOKENS),
+                ref_log_probs.view(N * G, SAMPLING_MAX_TOKENS),
+                response_mask.view(N * G, SAMPLING_MAX_TOKENS),
+            )
+            kl_old = kl_divergence(
+                final_policy_log_probs.view(N * G, SAMPLING_MAX_TOKENS),
+                old_log_probs.view(N * G, SAMPLING_MAX_TOKENS),
+                response_mask.view(N * G, SAMPLING_MAX_TOKENS),
+            )
+            print(f"KL divergence w.r.t reference: {kl_ref.item()}")
+            print(f"KL divergence w.r.t old policy: {kl_old.item()}")
+
+        avg_loss = total_loss / steps_per_rollout
+        return avg_loss
 
     def get_weights(self) -> dict[str, Any]:
         """
@@ -358,27 +435,78 @@ class Learner:
             torch.cuda.synchronize(self.learner_device)
 
 
+class ReferenceModel:
+    """Reference model for KL divergence computation in GRPO."""
+
+    def __init__(self, ckpt_file: str = CHECKPOINT_PATH):
+        self.ref_device = get_device()
+        self.ref_model: torch.nn.Module = Transformer(
+            vocab_size=VOCAB_SIZE,
+            num_layers=NUM_LAYERS,
+            d_model=D_MODEL,
+            num_heads=NUM_HEADS,
+            d_ff=D_FF,
+            context_length=CONTEXT_LENGTH,
+            theta=THETA,
+            device=self.ref_device,
+        )
+        self.ref_model.load_state_dict(
+            torch.load(ckpt_file, map_location=self.ref_device)
+        )
+        self.ref_model.to(self.ref_device)
+        self.ref_tokenizer = tiktoken.get_encoding("gpt2")
+
+    @torch.no_grad()
+    def get_reference_log_probs(self, trajectories: list[Trajectory]) -> torch.Tensor:
+        """
+        Compute reference log probabilities for generated tokens.
+
+        Args:
+            trajectories (list[Trajectory]): Rollout trajectories.
+
+        Returns:
+            torch.Tensor: Reference log probabilities tensor of shape
+                (num_trajectories, G, sequence_length).
+        """
+        ref_log_probs = compute_log_probs(
+            self.ref_model,
+            self.ref_tokenizer,
+            trajectories,
+            self.ref_device,
+        )  # (N, G, seq_len)
+        return ref_log_probs
+
+    def sync_reference(self) -> None:
+        if self.ref_device.type == "cuda":
+            torch.cuda.synchronize(self.ref_device)
+
+
 # ===================== Combined Actor =====================
 
 
 @ray.remote(num_gpus=1)
-class ColocatedWorker(Generator, Learner):
+class ColocatedWorker(Generator, Learner, ReferenceModel):
     """Combined Generator and Learner in a single Ray actor."""
 
     def __init__(self, ckpt_file: str, steps_per_rollout: int = 1):
         Generator.__init__(self, ckpt_file=ckpt_file)
         Learner.__init__(self, ckpt_file=ckpt_file)
+        ReferenceModel.__init__(self, ckpt_file=ckpt_file)
+
         self.steps_per_rollout = steps_per_rollout
         self.step_count = 0
         self.time_stats: dict[str, float] = {
             "rollout": 0.0,
             "update": 0.0,
             "transfer": 0.0,
+            "reference": 0.0,
             "total": 0.0,
         }
 
+        set_seed()
+
     def training_step(
-        self, prompts: list[str], verbose: bool = False
+        self, prompts: list[str], monitor_kl: bool = False, verbose: bool = False
     ) -> dict[str, Any]:
         """Perform one complete training step: generate rollout + update policy."""
 
@@ -389,10 +517,26 @@ class ColocatedWorker(Generator, Learner):
         self.sync_generator()
         rollout_end = time.perf_counter()
 
+        ref_log_probs: torch.Tensor | None = None
+        ref_time = 0.0
+        if monitor_kl:
+            self.sync_reference()
+            ref_start = time.perf_counter()
+            ref_log_probs = self.get_reference_log_probs(trajectories)
+            self.sync_reference()
+            ref_end = time.perf_counter()
+            ref_time = (ref_end - ref_start) * 1000
+
         # Update policy using GRPO
         self.sync_learner()
         update_start = time.perf_counter()
-        loss = self.update_policy(trajectories, self.steps_per_rollout, verbose=verbose)
+        loss = self.update_policy(
+            trajectories,
+            self.steps_per_rollout,
+            monitor_kl=monitor_kl,
+            ref_log_probs=ref_log_probs,
+            verbose=verbose,
+        )
         self.sync_learner()
         update_end = time.perf_counter()
 
@@ -412,10 +556,12 @@ class ColocatedWorker(Generator, Learner):
         rollout_pct = rollout_time_ms / total_time_ms * 100
         update_pct = update_time_ms / total_time_ms * 100
         transfer_pct = transfer_time_ms / total_time_ms * 100
+        ref_pct = ref_time / total_time_ms * 100
         self.time_stats["total"] += total_time_ms
         self.time_stats["rollout"] += rollout_time_ms
         self.time_stats["update"] += update_time_ms
         self.time_stats["transfer"] += transfer_time_ms
+        self.time_stats["reference"] += ref_time
 
         return {
             "step": self.step_count,
@@ -430,6 +576,7 @@ class ColocatedWorker(Generator, Learner):
             "rollout_time_ms": f"{rollout_time_ms} ({rollout_pct:.1f}%)",
             "update_time_ms": f"{update_time_ms} ({update_pct:.1f}%)",
             "transfer_time_ms": f"{transfer_time_ms} ({transfer_pct:.1f}%)",
+            "reference_time_ms": f"{ref_time} ({ref_pct:.1f}%)",
         }
 
     def get_statistics(self) -> dict[str, Any]:
@@ -459,6 +606,7 @@ def run_training(
     num_workers: int = 1,
     prompts_per_batch: int = 4,
     steps_per_rollout: int = 1,
+    monitor_kl: bool = False,
     verbose: bool = False,
 ) -> None:
     """
@@ -471,6 +619,7 @@ def run_training(
         num_workers (int): Number of colocated workers to use.
         prompts_per_batch (int): Number of prompts per batch.
         steps_per_rollout (int): Number of training steps per rollout.
+        monitor_kl (bool): Whether to monitor KL divergence.
         verbose (bool): Whether to enable verbose logging.
     """
     # Create workers
@@ -484,12 +633,15 @@ def run_training(
     with open(keywords_file, "r") as f:
         keywords = [line.strip() for line in f.readlines() if line.strip()]
 
+    set_seed()
     for step in range(num_steps):
         # Sample keywords (single keyword per prompt)
         kws_batch = np.random.choice(keywords, size=prompts_per_batch, replace=False)
         prompts = [make_keyword_inclusion_prompt([kw]) for kw in kws_batch]
         # Perform training step
-        step_stats = ray.get(worker.training_step.remote(prompts, verbose=verbose))
+        step_stats = ray.get(
+            worker.training_step.remote(prompts, monitor_kl=monitor_kl, verbose=verbose)
+        )
         print(f"Step {step}: {step_stats}")
 
     # Get final statistics
@@ -504,6 +656,7 @@ def run_once(
     num_workers: int = 1,
     prompts_per_batch: int = 4,
     steps_per_rollout: int = 1,
+    monitor_kl: bool = False,
     verbose: bool = False,
 ) -> None:
     """Entry point for training."""
@@ -514,6 +667,7 @@ def run_once(
         num_workers=num_workers,
         prompts_per_batch=prompts_per_batch,
         steps_per_rollout=steps_per_rollout,
+        monitor_kl=monitor_kl,
         verbose=verbose,
     )
 
@@ -544,6 +698,9 @@ if __name__ == "__main__":
         default=1,
         help="Number of training steps per rollout",
     )
+    parser.add_argument(
+        "--monitor_kl", action="store_true", help="Monitor KL divergence"
+    )
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
     args = parser.parse_args()
 
@@ -564,6 +721,7 @@ if __name__ == "__main__":
             num_workers=args.workers,
             prompts_per_batch=args.prompts_per_batch,
             steps_per_rollout=args.steps_per_rollout,
+            monitor_kl=args.monitor_kl,
             verbose=args.verbose,
         )
         log("Training completed.")

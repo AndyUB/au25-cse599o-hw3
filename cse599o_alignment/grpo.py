@@ -199,3 +199,25 @@ def grpo_microbatch_train_step(
     microbatch_loss = torch.mean(masked_loss) / gradient_accumulation_steps
     microbatch_loss.backward()
     return microbatch_loss, loss_metadata
+
+
+def kl_divergence(
+    policy_log_probs: torch.Tensor,
+    reference_log_probs: torch.Tensor,
+    response_mask: torch.Tensor,
+) -> torch.Tensor:
+    """
+    Compute the KL divergence between the policy and reference distributions,
+    masked by the response mask.
+
+    Args:
+        policy_log_probs: (batch_size, sequence_length), log probabilities from the policy.
+        reference_log_probs: (batch_size, sequence_length), log probabilities from the reference.
+        response_mask: (batch_size, sequence_length), mask for valid response tokens.
+
+    Returns:
+        torch.Tensor: KL divergence as a scalar tensor.
+    """
+    log_ratio = policy_log_probs - reference_log_probs
+    kl = masked_mean(log_ratio, response_mask, dim=None)
+    return kl

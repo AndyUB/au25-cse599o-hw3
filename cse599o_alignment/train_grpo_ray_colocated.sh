@@ -8,4 +8,6 @@ timestamp=$(date +"%Y%m%d_%H%M%S")
 
 uv run $SUBDIR/train_grpo_ray_colocated.py --keywords_file $SUBDIR/prompts/keywords.txt \
     --ckpt_file $SUBDIR/ckpt/model.pt \
+    --monitor_kl \
     --verbose > $LOG_DIR/$timestamp.log 2>&1
+    # --steps 5 \

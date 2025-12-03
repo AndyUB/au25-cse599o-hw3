@@ -11,6 +11,8 @@ synchronous training without replay buffer, training directly on each trajectory
 """
 
 import argparse
+import json
+import os
 import ray
 import torch
 import tiktoken
@@ -21,9 +23,12 @@ import numpy as np
 from cse599o_basics.model import Transformer
 from cse599o_basics.optimizer import AdamW, gradient_clipping
 from cse599o_alignment.grpo import grpo_microbatch_train_step, kl_divergence
+from cse599o_alignment.plot_util import plot_kl_rewards
 from cse599o_alignment.train_util import (
+    Prompt,
     extract_keywords_from_prompt,
     generate_response,
+    generate_response_with_probs,
     keyword_inclusion_reward,
     make_keyword_inclusion_prompt,
     set_seed,
@@ -210,7 +215,7 @@ class Generator:
             rewards: list[float] = []
 
             for i in range(G):
-                response, log_probs = generate_response(
+                response, log_probs = generate_response_with_probs(
                     self.generator_model,
                     self.generator_tokenizer,
                     prompt,
@@ -297,6 +302,15 @@ class Learner:
         )
         self.learner_tokenizer = tiktoken.get_encoding("gpt2")
 
+        self.learner_stats: dict[str, Any] = {
+            "avg_train_rewards": [],
+            "losses": [],
+            "responses": [],
+            "avg_val_rewards": [],
+            "ref_kls": [],
+            "old_kls": [],
+        }
+
     def compute_advantages(self, trajectories: list[Trajectory]) -> torch.Tensor:
         """
         Compute advantages for GRPO.
@@ -338,12 +352,45 @@ class Learner:
         )  # (N, G, seq_len)
         return policy_log_probs
 
+    @torch.no_grad()
+    def get_val_reward(self, val_prompts: list[Prompt]) -> float:
+        """
+        Compute average reward on validation prompts.
+
+        Args:
+            val_prompts (list[Prompt]): List of validation prompts.
+
+        Returns:
+            float: Average reward over validation prompts.
+        """
+        total_reward = 0.0
+        responses: list[str] = []
+
+        for prompt in val_prompts:
+            response = generate_response(
+                model = self.learner_model,
+                tokenizer = self.learner_tokenizer,
+                prompt = prompt.token_tensor,
+                max_tokens = SAMPLING_MAX_TOKENS,
+                temperature = SAMPLING_TEMPERATURE,
+                context_length = CONTEXT_LENGTH,
+                device = self.learner_device,
+            )
+            reward = keyword_inclusion_reward(response, prompt.keywords)["reward"]
+            total_reward += reward
+            responses.append(response)
+
+        self.learner_stats["responses"].append(responses)
+        avg_reward = total_reward / len(val_prompts)
+        return avg_reward
+
     def update_policy(
         self,
         trajectories: list[Trajectory],
         steps_per_rollout: int = 1,
         monitor_kl: bool = False,
         ref_log_probs: torch.Tensor | None = None,
+        val_prompts: list[Prompt] | None = None,
         verbose: bool = False,
     ) -> float:
         """
@@ -355,6 +402,7 @@ class Learner:
             monitor_kl (bool): Whether to monitor KL divergence.
             ref_log_probs (torch.Tensor | None): Reference log probabilities for KL computation.
                 Required if monitor_kl is True. Shape (num_trajectories, G, sequence_length).
+            val_prompts (list[Prompt] | None): Validation prompts. Required if monitor_kl is True.
             verbose (bool): Whether to enable verbose logging.
 
         Returns:
@@ -367,6 +415,8 @@ class Learner:
         # 4. Return loss value
         if monitor_kl and ref_log_probs is None:
             raise ValueError("ref_log_probs must be provided when monitor_kl is True")
+        if monitor_kl and val_prompts is None:
+            raise ValueError("val_prompts must be provided when monitor_kl is True")
 
         N = len(trajectories)
         advantages = self.compute_advantages(trajectories)  # (N, G)
@@ -409,16 +459,26 @@ class Learner:
                 final_policy_log_probs.view(N * G, SAMPLING_MAX_TOKENS),
                 ref_log_probs.view(N * G, SAMPLING_MAX_TOKENS),
                 response_mask.view(N * G, SAMPLING_MAX_TOKENS),
-            )
+            ).item()
             kl_old = kl_divergence(
                 final_policy_log_probs.view(N * G, SAMPLING_MAX_TOKENS),
                 old_log_probs.view(N * G, SAMPLING_MAX_TOKENS),
                 response_mask.view(N * G, SAMPLING_MAX_TOKENS),
-            )
-            print(f"KL divergence w.r.t reference: {kl_ref.item()}")
-            print(f"KL divergence w.r.t old policy: {kl_old.item()}")
+            ).item()
+            print(f"KL divergence w.r.t reference: {kl_ref}")
+            print(f"KL divergence w.r.t old policy: {kl_old}")
+            
+            avg_val_reward = self.get_val_reward(val_prompts)
+            print(f"Average validation reward: {avg_val_reward}")
+
+            self.learner_stats["avg_val_rewards"].append(avg_val_reward)
+            self.learner_stats["ref_kls"].append(kl_ref)
+            self.learner_stats["old_kls"].append(kl_old)
 
         avg_loss = total_loss / steps_per_rollout
+        avg_reward = float(torch.cat([traj.rewards for traj in trajectories]).mean())
+        self.learner_stats["losses"].append(avg_loss)
+        self.learner_stats["avg_train_rewards"].append(avg_reward)
         return avg_loss
 
     def get_weights(self) -> dict[str, Any]:
@@ -433,6 +493,37 @@ class Learner:
     def sync_learner(self) -> None:
         if self.learner_device.type == "cuda":
             torch.cuda.synchronize(self.learner_device)
+
+    def export_learner_stats(self, results_dir: str) -> None:
+        """Export learner validation statistics to files."""
+        os.makedirs(results_dir, exist_ok=True)
+
+        responses_file = os.path.join(results_dir, "val_responses.json")
+        with open(responses_file, "w") as f:
+            json.dump(self.learner_stats["responses"], f, indent=4)
+
+        stats_file = os.path.join(results_dir, "stats.json")
+        with open(stats_file, "w") as f:
+            json.dump(
+                {
+                    "losses": self.learner_stats["losses"],
+                    "avg_train_rewards": self.learner_stats["avg_train_rewards"],
+                    "avg_val_rewards": self.learner_stats["avg_val_rewards"],
+                    "ref_kls": self.learner_stats["ref_kls"],
+                    "old_kls": self.learner_stats["old_kls"],
+                },
+                f,
+                indent=4,
+            )
+        
+        plot_file = os.path.join(results_dir, "kl_rewards.png")
+        plot_kl_rewards(
+            ref_kls=self.learner_stats["ref_kls"],
+            old_kls=self.learner_stats["old_kls"],
+            avg_train_rewards=self.learner_stats["avg_train_rewards"],
+            avg_val_rewards=self.learner_stats["avg_val_rewards"],
+            out_file=plot_file,
+        )
 
 
 class ReferenceModel:
@@ -488,7 +579,7 @@ class ReferenceModel:
 class ColocatedWorker(Generator, Learner, ReferenceModel):
     """Combined Generator and Learner in a single Ray actor."""
 
-    def __init__(self, ckpt_file: str, steps_per_rollout: int = 1):
+    def __init__(self, ckpt_file: str, prompts_val: list[str], steps_per_rollout: int = 1):
         Generator.__init__(self, ckpt_file=ckpt_file)
         Learner.__init__(self, ckpt_file=ckpt_file)
         ReferenceModel.__init__(self, ckpt_file=ckpt_file)
@@ -503,6 +594,7 @@ class ColocatedWorker(Generator, Learner, ReferenceModel):
             "total": 0.0,
         }
 
+        self.prompts_val = [Prompt(p, self.learner_tokenizer, self.learner_device) for p in prompts_val]
         set_seed()
 
     def training_step(
@@ -535,6 +627,7 @@ class ColocatedWorker(Generator, Learner, ReferenceModel):
             self.steps_per_rollout,
             monitor_kl=monitor_kl,
             ref_log_probs=ref_log_probs,
+            val_prompts=self.prompts_val,
             verbose=verbose,
         )
         self.sync_learner()
@@ -579,8 +672,10 @@ class ColocatedWorker(Generator, Learner, ReferenceModel):
             "reference_time_ms": f"{ref_time} ({ref_pct:.1f}%)",
         }
 
-    def get_statistics(self) -> dict[str, Any]:
+    def get_statistics(self, result_dir: str) -> dict[str, Any]:
         """Get current training statistics."""
+        self.export_learner_stats(result_dir)
+
         total_time = self.time_stats["total"]
         time_stats_pct = {k: v / total_time * 100 for k, v in self.time_stats.items()}
 
@@ -595,6 +690,18 @@ class ColocatedWorker(Generator, Learner, ReferenceModel):
             "time_stats_pct": time_stats_pct,
         }
 
+    def save_ckpt(self, ckpt_file: str) -> None:
+        """Save current learner model checkpoint."""
+        model_state_dict = self.learner_model.state_dict()
+        optimizer_states = self.learner_optimizer.state_dict()
+        curr_iter = self.step_count
+        checkpoint = {
+            "model_state_dict": model_state_dict,
+            "optimizer_states": optimizer_states,
+            "iteration": curr_iter,
+        }
+        torch.save(checkpoint, ckpt_file)
+
 
 # ===================== Training loop =====================
 
@@ -602,9 +709,11 @@ class ColocatedWorker(Generator, Learner, ReferenceModel):
 def run_training(
     keywords_file: str,
     ckpt_file: str,
+    result_dir: str,
     num_steps: int = 10,
     num_workers: int = 1,
-    prompts_per_batch: int = 4,
+    prompts_per_batch: int = 32,
+    num_val_prompts: int = 32,
     steps_per_rollout: int = 1,
     monitor_kl: bool = False,
     verbose: bool = False,
@@ -615,46 +724,59 @@ def run_training(
     Args:
         keywords_file (str): Path to keywords file.
         ckpt_file (str): Path to model checkpoint.
+        result_dir (str): Directory to save results.
         num_steps (int): Number of training steps to perform.
         num_workers (int): Number of colocated workers to use.
         prompts_per_batch (int): Number of prompts per batch.
+        num_val_prompts (int): Number of validation prompts.
         steps_per_rollout (int): Number of training steps per rollout.
         monitor_kl (bool): Whether to monitor KL divergence.
         verbose (bool): Whether to enable verbose logging.
     """
-    # Create workers
     if num_workers != 1:
         raise ValueError("Only supports a single colocated worker")
-    worker = ColocatedWorker.remote(
-        ckpt_file=ckpt_file, steps_per_rollout=steps_per_rollout
-    )
 
     # Define training prompts
     with open(keywords_file, "r") as f:
         keywords = [line.strip() for line in f.readlines() if line.strip()]
+    # Last num_val_prompts keywords are used for validation
+    if num_val_prompts + prompts_per_batch > len(keywords):
+        raise ValueError("Not enough keywords for training and validation")
+    keywords_train = keywords[: -num_val_prompts]
+    keywords_val = keywords[-num_val_prompts :]
+    prompts_val = [make_keyword_inclusion_prompt([kw]) for kw in keywords_val]
+
+    # Create workers
+    worker = ColocatedWorker.remote(
+        ckpt_file=ckpt_file, steps_per_rollout=steps_per_rollout, prompts_val=prompts_val
+    )
 
     set_seed()
     for step in range(num_steps):
         # Sample keywords (single keyword per prompt)
-        kws_batch = np.random.choice(keywords, size=prompts_per_batch, replace=False)
-        prompts = [make_keyword_inclusion_prompt([kw]) for kw in kws_batch]
+        kws_batch = np.random.choice(keywords_train, size=prompts_per_batch, replace=False)
+        prompts_train = [make_keyword_inclusion_prompt([kw]) for kw in kws_batch]
         # Perform training step
         step_stats = ray.get(
-            worker.training_step.remote(prompts, monitor_kl=monitor_kl, verbose=verbose)
+            worker.training_step.remote(prompts_train, monitor_kl=monitor_kl, verbose=verbose)
         )
         print(f"Step {step}: {step_stats}")
+        if (step + 1) % 5 == 0:
+            ray.get(worker.save_ckpt.remote(os.path.join(result_dir, f"step{step}.pt")))
 
     # Get final statistics
-    stats: dict[str, Any] = ray.get(worker.get_statistics.remote())
+    stats: dict[str, Any] = ray.get(worker.get_statistics.remote(result_dir))
     print(f"Final training statistics: {stats}")
 
 
 def run_once(
     keywords_file: str,
     ckpt_file: str,
+    result_dir: str,
     num_steps: int = 10,
     num_workers: int = 1,
-    prompts_per_batch: int = 4,
+    prompts_per_batch: int = 32,
+    num_val_prompts: int = 32,
     steps_per_rollout: int = 1,
     monitor_kl: bool = False,
     verbose: bool = False,
@@ -663,9 +785,11 @@ def run_once(
     run_training(
         keywords_file=keywords_file,
         ckpt_file=ckpt_file,
+        result_dir=result_dir,
         num_steps=num_steps,
         num_workers=num_workers,
         prompts_per_batch=prompts_per_batch,
+        num_val_prompts=num_val_prompts,
         steps_per_rollout=steps_per_rollout,
         monitor_kl=monitor_kl,
         verbose=verbose,
@@ -682,6 +806,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--ckpt_file", type=str, required=True, help="Path to model checkpoint"
     )
+    parser.add_argument(
+        "--result_dir", type=str, required=True, help="Directory to save results"
+    )
 
     parser.add_argument(
         "--steps", type=int, default=N_GRPO_STEPS, help="Number of training steps"
@@ -690,7 +817,10 @@ if __name__ == "__main__":
         "--workers", type=int, default=1, help="Number of colocated workers"
     )
     parser.add_argument(
-        "--prompts_per_batch", type=int, default=4, help="Number of prompts per batch"
+        "--prompts_per_batch", type=int, default=32, help="Number of prompts per batch"
+    )
+    parser.add_argument(
+        "--num_val_prompts", type=int, default=32, help="Number of validation prompts"
     )
     parser.add_argument(
         "--steps_per_rollout",
@@ -710,16 +840,37 @@ if __name__ == "__main__":
 
     log(f"Args: {args}.")
 
-    ray.init(ignore_reinit_error=True)
+    ray.init(
+        runtime_env={
+            "excludes": [
+                ".git/**",  # git metadata and objects
+                ".venv/**",  # virtual environment
+                "tests/fixtures/**",  # test fixtures (large model files)
+                "*.nsys-rep",  # profiling files
+                # "*.pt",
+                # "*.pth",
+                # "*.safetensors",  # model weight files
+                "*.tar",
+                "*.zip",
+                "*.gz",  # archives
+                "__pycache__/**",  # Python cache
+                "*.egg-info/**",  # package info
+            ]
+        },
+        _temp_dir="/homes/iws/yhruan22/raytmp",
+        ignore_reinit_error=True,
+    )
     log("Ray initialized.")
 
     try:
         run_once(
             keywords_file=args.keywords_file,
             ckpt_file=args.ckpt_file,
+            result_dir=args.result_dir,
             num_steps=args.steps,
             num_workers=args.workers,
             prompts_per_batch=args.prompts_per_batch,
+            num_val_prompts=args.num_val_prompts,
             steps_per_rollout=args.steps_per_rollout,
             monitor_kl=args.monitor_kl,
             verbose=args.verbose,

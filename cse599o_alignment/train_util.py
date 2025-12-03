@@ -48,6 +48,14 @@ def extract_keywords_from_prompt(prompt: str) -> list[str]:
     return keywords
 
 
+class Prompt:
+    def __init__(self, text: str, tokenizer: tiktoken.Encoding, device: torch.device):
+        self.text = text
+        self.keywords = extract_keywords_from_prompt(text)
+        self.tokens = tokenizer.encode(text)
+        self.token_tensor = torch.tensor([self.tokens], device=device)  # (1, prompt_len)
+
+
 def keyword_inclusion_reward(
     response: str,
     keywords: list[str],
@@ -92,7 +100,7 @@ def set_seed(seed: int = 599) -> None:
 
 
 @torch.no_grad()
-def generate_response(
+def generate_response_with_probs(
     model: torch.nn.Module,
     tokenizer: tiktoken.Encoding,
     prompt: str,
@@ -102,7 +110,7 @@ def generate_response(
     device: torch.device,
 ) -> tuple[list[int], torch.Tensor]:
     """
-    Generate a response from the model given a prompt.
+    Generate a response with log probabilities from the model given a prompt.
 
     Args:
         model (torch.nn.Module): The language model for generation.
@@ -145,3 +153,53 @@ def generate_response(
 
     probs_tensor = torch.tensor(log_probs, device=device)  # (generated_seq_len,)
     return generated_tokens, probs_tensor
+
+
+@torch.no_grad()
+def generate_response(
+    model: torch.nn.Module,
+    tokenizer: tiktoken.Encoding,
+    prompt: torch.Tensor,
+    max_tokens: int,
+    temperature: float,
+    context_length: int,
+    device: torch.device,
+) -> str:
+    """
+    Generate a response from the model given a prompt.
+
+    Args:
+        model (torch.nn.Module): The language model for generation.
+        tokenizer (tiktoken.Encoding): The tokenizer for encoding/decoding text.
+        prompt (torch.Tensor): The input prompt tensor of shape (1, prompt_length).
+        max_tokens (int): Maximum number of tokens to generate.
+        temperature (float): Sampling temperature.
+        context_length (int): Maximum context length for the model.
+        device (torch.device): Device for computation.
+
+    Returns:
+        str: The generated response string.
+    """
+    model.eval()
+    input_ids = prompt.to(device)  # (1, seq_len)
+    generated_tokens: list[int] = []
+
+    for _ in range(max_tokens):
+        if input_ids.shape[1] > context_length:
+            break
+
+        logits = model(input_ids)  # (1, seq_len, vocab_size)
+        next_token_logits = logits[:, -1, :] / temperature  # (1, vocab_size)
+        dist = Categorical(logits=next_token_logits)
+        next_token_id = dist.sample()  # (1,)
+        generated_tokens.append(int(next_token_id.item()))
+
+        if next_token_id.item() == tokenizer.eot_token:
+            break
+
+        input_ids = torch.cat(
+            [input_ids, next_token_id.unsqueeze(0)], dim=1
+        )  # (1, seq_len+1)
+
+    response = tokenizer.decode(generated_tokens)
+    return response

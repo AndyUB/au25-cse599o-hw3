@@ -690,8 +690,16 @@ class ColocatedWorker(Generator, Learner, ReferenceModel):
             "time_stats_pct": time_stats_pct,
         }
 
-    def save_ckpt(self, ckpt_file: str) -> None:
-        """Save current learner model checkpoint."""
+    def save_ckpt(self, result_dir: str, step: int) -> None:
+        """
+        Save current learner model checkpoint.
+
+        Args:
+            result_dir (str): Directory to save checkpoint.
+            step (int): Number of training steps completed.
+        """
+        os.makedirs(result_dir, exist_ok=True)
+        ckpt_file = os.path.join(result_dir, f"step{step}.pt")
         model_state_dict = self.learner_model.state_dict()
         optimizer_states = self.learner_optimizer.state_dict()
         curr_iter = self.step_count
@@ -715,6 +723,7 @@ def run_training(
     prompts_per_batch: int = 32,
     num_val_prompts: int = 32,
     steps_per_rollout: int = 1,
+    ckpt_interval: int = 5,
     monitor_kl: bool = False,
     verbose: bool = False,
 ) -> None:
@@ -761,8 +770,8 @@ def run_training(
             worker.training_step.remote(prompts_train, monitor_kl=monitor_kl, verbose=verbose)
         )
         print(f"Step {step}: {step_stats}")
-        if (step + 1) % 5 == 0:
-            ray.get(worker.save_ckpt.remote(os.path.join(result_dir, f"step{step}.pt")))
+        if (step + 1) % ckpt_interval == 0:
+            ray.get(worker.save_ckpt.remote(result_dir, step + 1))
 
     # Get final statistics
     stats: dict[str, Any] = ray.get(worker.get_statistics.remote(result_dir))
@@ -778,6 +787,7 @@ def run_once(
     prompts_per_batch: int = 32,
     num_val_prompts: int = 32,
     steps_per_rollout: int = 1,
+    ckpt_interval: int = 5,
     monitor_kl: bool = False,
     verbose: bool = False,
 ) -> None:
@@ -791,6 +801,7 @@ def run_once(
         prompts_per_batch=prompts_per_batch,
         num_val_prompts=num_val_prompts,
         steps_per_rollout=steps_per_rollout,
+        ckpt_interval=ckpt_interval,
         monitor_kl=monitor_kl,
         verbose=verbose,
     )
@@ -827,6 +838,9 @@ if __name__ == "__main__":
         type=int,
         default=1,
         help="Number of training steps per rollout",
+    )
+    parser.add_argument(
+        "--ckpt_interval", type=int, default=5, help="Checkpoint save interval"
     )
     parser.add_argument(
         "--monitor_kl", action="store_true", help="Monitor KL divergence"
@@ -872,6 +886,7 @@ if __name__ == "__main__":
             prompts_per_batch=args.prompts_per_batch,
             num_val_prompts=args.num_val_prompts,
             steps_per_rollout=args.steps_per_rollout,
+            ckpt_interval=args.ckpt_interval,
             monitor_kl=args.monitor_kl,
             verbose=args.verbose,
         )

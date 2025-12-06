@@ -25,11 +25,8 @@ from cse599o_basics.optimizer import AdamW, gradient_clipping
 from cse599o_alignment.grpo import grpo_microbatch_train_step, kl_divergence
 from cse599o_alignment.plot_util import plot_kl_rewards
 from cse599o_alignment.train_util import (
-    Prompt,
-    extract_keywords_from_prompt,
-    generate_response,
-    generate_response_with_probs,
-    keyword_inclusion_reward,
+    batch_generate_responses,
+    group_decode_with_rewards,
     make_keyword_inclusion_prompt,
     set_seed,
 )
@@ -205,32 +202,36 @@ class Generator:
         """
         trajs: list[Trajectory] = []
 
-        for prompt in prompts:
-            keywords = extract_keywords_from_prompt(prompt)
+        # len(generated_tokens) == len(log_probs) == len(prompts) * G
+        generated_tokens_list, log_probs_list = batch_generate_responses(
+            model=self.generator_model,
+            tokenizer=self.generator_tokenizer,
+            prompts=prompts,
+            group_size=G,
+            max_tokens=SAMPLING_MAX_TOKENS,
+            temperature=SAMPLING_TEMPERATURE,
+            context_length=CONTEXT_LENGTH,
+            device=self.generator_device,
+        )
+
+        for prompt_id in range(len(prompts)):
+            prompt = prompts[prompt_id]
+            response_id_start = prompt_id * G
+            response_id_end = response_id_start + G
+            tokens_group = generated_tokens_list[response_id_start:response_id_end]
+            log_probs_group = log_probs_list[response_id_start:response_id_end]
+            responses, rewards, keywords = group_decode_with_rewards(
+                tokenizer=self.generator_tokenizer,
+                prompt=prompt,
+                grouped_tokens=tokens_group,
+            )
+
             if verbose:
-                print(f"Prompt: {prompt} | Keywords: {keywords}")
-
-            responses: list[torch.Tensor] = []
-            log_probs_list: list[torch.Tensor] = []
-            rewards: list[float] = []
-
-            for i in range(G):
-                response, log_probs = generate_response_with_probs(
-                    self.generator_model,
-                    self.generator_tokenizer,
-                    prompt,
-                    SAMPLING_MAX_TOKENS,
-                    SAMPLING_TEMPERATURE,
-                    CONTEXT_LENGTH,
-                    self.generator_device,
-                )
-                response_str = self.generator_tokenizer.decode(response)
-                if verbose:
-                    print(f"Response {i}: {response_str}")
-                reward = keyword_inclusion_reward(response_str, keywords)["reward"]
-                responses.append(torch.tensor(response, device=self.generator_device))
-                log_probs_list.append(log_probs)
-                rewards.append(reward)
+                print(f"Prompt: {prompt} (Keywords: {keywords})")
+                for resp_id in range(G):
+                    response = responses[resp_id]
+                    reward = rewards[resp_id]
+                    print(f"Response #{resp_id} ({reward} reward): {response}")
 
             rewards_tensor = torch.tensor(rewards, device=self.generator_device)  # (G,)
             responses_tensor = torch.zeros(
@@ -242,11 +243,19 @@ class Generator:
             response_masks = torch.zeros(
                 (G, SAMPLING_MAX_TOKENS), dtype=torch.bool, device=self.generator_device
             )  # (G, sequence_length)
-            for i in range(G):
-                seq_len = responses[i].size(0)
-                responses_tensor[i, :seq_len] = responses[i]
-                log_probs_tensor[i, :seq_len] = log_probs_list[i]
-                response_masks[i, :seq_len] = 1
+
+            for response_id_in_group in range(G):
+                tokens = tokens_group[response_id_in_group]
+                log_probs = log_probs_group[response_id_in_group]
+
+                seq_len = len(tokens)
+                responses_tensor[response_id_in_group, :seq_len] = torch.tensor(
+                    tokens, device=self.generator_device
+                )
+                log_probs_tensor[response_id_in_group, :seq_len] = torch.tensor(
+                    log_probs, device=self.generator_device
+                )
+                response_masks[response_id_in_group, :seq_len] = 1
 
             traj = Trajectory(
                 prompt=prompt,
@@ -353,30 +362,37 @@ class Learner:
         return policy_log_probs
 
     @torch.no_grad()
-    def get_val_reward(self, val_prompts: list[Prompt]) -> float:
+    def get_val_reward(self, val_prompts: list[str]) -> float:
         """
         Compute average reward on validation prompts.
 
         Args:
-            val_prompts (list[Prompt]): List of validation prompts.
+            val_prompts (list[str]): List of validation prompts.
 
         Returns:
             float: Average reward over validation prompts.
         """
+        tokens_list, _ = batch_generate_responses(
+            model=self.learner_model,
+            tokenizer=self.learner_tokenizer,
+            prompts=val_prompts,
+            group_size=1,
+            max_tokens=SAMPLING_MAX_TOKENS,
+            temperature=SAMPLING_TEMPERATURE,
+            context_length=CONTEXT_LENGTH,
+            device=self.learner_device,
+            with_probs=False,
+        )
+
         total_reward = 0.0
         responses: list[str] = []
-
-        for prompt in val_prompts:
-            response = generate_response(
-                model = self.learner_model,
-                tokenizer = self.learner_tokenizer,
-                prompt = prompt.token_tensor,
-                max_tokens = SAMPLING_MAX_TOKENS,
-                temperature = SAMPLING_TEMPERATURE,
-                context_length = CONTEXT_LENGTH,
-                device = self.learner_device,
+        for tokens, prompt in zip(tokens_list, val_prompts):
+            response, reward, _ = group_decode_with_rewards(
+                tokenizer=self.learner_tokenizer,
+                prompt=prompt,
+                grouped_tokens=[tokens],
             )
-            reward = keyword_inclusion_reward(response, prompt.keywords)["reward"]
+            response, reward = responses[0], reward[0]
             total_reward += reward
             responses.append(response)
 
@@ -390,7 +406,7 @@ class Learner:
         steps_per_rollout: int = 1,
         monitor_kl: bool = False,
         ref_log_probs: torch.Tensor | None = None,
-        val_prompts: list[Prompt] | None = None,
+        val_prompts: list[str] | None = None,
         verbose: bool = False,
     ) -> float:
         """
@@ -402,7 +418,7 @@ class Learner:
             monitor_kl (bool): Whether to monitor KL divergence.
             ref_log_probs (torch.Tensor | None): Reference log probabilities for KL computation.
                 Required if monitor_kl is True. Shape (num_trajectories, G, sequence_length).
-            val_prompts (list[Prompt] | None): Validation prompts. Required if monitor_kl is True.
+            val_prompts (list[str] | None): Validation prompts. Required if monitor_kl is True.
             verbose (bool): Whether to enable verbose logging.
 
         Returns:
@@ -467,7 +483,7 @@ class Learner:
             ).item()
             print(f"KL divergence w.r.t reference: {kl_ref}")
             print(f"KL divergence w.r.t old policy: {kl_old}")
-            
+
             avg_val_reward = self.get_val_reward(val_prompts)
             print(f"Average validation reward: {avg_val_reward}")
 
@@ -515,7 +531,7 @@ class Learner:
                 f,
                 indent=4,
             )
-        
+
         plot_file = os.path.join(results_dir, "kl_rewards.png")
         plot_kl_rewards(
             ref_kls=self.learner_stats["ref_kls"],
@@ -579,7 +595,9 @@ class ReferenceModel:
 class ColocatedWorker(Generator, Learner, ReferenceModel):
     """Combined Generator and Learner in a single Ray actor."""
 
-    def __init__(self, ckpt_file: str, prompts_val: list[str], steps_per_rollout: int = 1):
+    def __init__(
+        self, ckpt_file: str, prompts_val: list[str], steps_per_rollout: int = 1
+    ):
         Generator.__init__(self, ckpt_file=ckpt_file)
         Learner.__init__(self, ckpt_file=ckpt_file)
         ReferenceModel.__init__(self, ckpt_file=ckpt_file)
@@ -594,7 +612,7 @@ class ColocatedWorker(Generator, Learner, ReferenceModel):
             "total": 0.0,
         }
 
-        self.prompts_val = [Prompt(p, self.learner_tokenizer, self.learner_device) for p in prompts_val]
+        self.prompts_val = prompts_val
         set_seed()
 
     def training_step(
@@ -751,23 +769,29 @@ def run_training(
     # Last num_val_prompts keywords are used for validation
     if num_val_prompts + prompts_per_batch > len(keywords):
         raise ValueError("Not enough keywords for training and validation")
-    keywords_train = keywords[: -num_val_prompts]
-    keywords_val = keywords[-num_val_prompts :]
+    keywords_train = keywords[:-num_val_prompts]
+    keywords_val = keywords[-num_val_prompts:]
     prompts_val = [make_keyword_inclusion_prompt([kw]) for kw in keywords_val]
 
     # Create workers
     worker = ColocatedWorker.remote(
-        ckpt_file=ckpt_file, steps_per_rollout=steps_per_rollout, prompts_val=prompts_val
+        ckpt_file=ckpt_file,
+        steps_per_rollout=steps_per_rollout,
+        prompts_val=prompts_val,
     )
 
     set_seed()
     for step in range(num_steps):
         # Sample keywords (single keyword per prompt)
-        kws_batch = np.random.choice(keywords_train, size=prompts_per_batch, replace=False)
+        kws_batch = np.random.choice(
+            keywords_train, size=prompts_per_batch, replace=False
+        )
         prompts_train = [make_keyword_inclusion_prompt([kw]) for kw in kws_batch]
         # Perform training step
         step_stats = ray.get(
-            worker.training_step.remote(prompts_train, monitor_kl=monitor_kl, verbose=verbose)
+            worker.training_step.remote(
+                prompts_train, monitor_kl=monitor_kl, verbose=verbose
+            )
         )
         print(f"Step {step}: {step_stats}")
         if (step + 1) % ckpt_interval == 0:

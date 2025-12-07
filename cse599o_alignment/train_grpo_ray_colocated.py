@@ -443,29 +443,24 @@ class Learner:
             [traj.response_masks for traj in trajectories]
         )  # (N, G, seq_len)
 
-        total_loss = 0.0
-        for step in range(steps_per_rollout):
-            self.learner_optimizer.zero_grad()
-            policy_log_probs = self.get_policy_log_probs(
-                trajectories
-            )  # (N, G, seq_len)
-            loss, _ = grpo_microbatch_train_step(
-                policy_log_probs=policy_log_probs.view(N * G, SAMPLING_MAX_TOKENS),
-                response_mask=response_mask.view(N * G, SAMPLING_MAX_TOKENS),
-                gradient_accumulation_steps=steps_per_rollout,
-                loss_type=LOSS_TYPE,
-                advantages=advantages.view(N * G, 1),
-                old_log_probs=old_log_probs.view(N * G, SAMPLING_MAX_TOKENS),
-                cliprange=CLIPRANGE,
-            )
-            gradient_clipping(
-                list(self.learner_model.parameters()), MAX_GRAD_NORM, verbose=verbose
-            )
-            self.learner_optimizer.step()
-
-            total_loss += loss.item()
-            if verbose:
-                print(f"Microstep {step}, Loss: {loss.item()}")
+        self.learner_optimizer.zero_grad()
+        policy_log_probs = self.get_policy_log_probs(trajectories)  # (N, G, seq_len)
+        loss_tensor, _ = grpo_microbatch_train_step(
+            policy_log_probs=policy_log_probs.view(N * G, SAMPLING_MAX_TOKENS),
+            response_mask=response_mask.view(N * G, SAMPLING_MAX_TOKENS),
+            gradient_accumulation_steps=steps_per_rollout,
+            loss_type=LOSS_TYPE,
+            advantages=advantages.view(N * G, 1),
+            old_log_probs=old_log_probs.view(N * G, SAMPLING_MAX_TOKENS),
+            cliprange=CLIPRANGE,
+        )
+        gradient_clipping(
+            list(self.learner_model.parameters()), MAX_GRAD_NORM, verbose=verbose
+        )
+        self.learner_optimizer.step()
+        loss: float = loss_tensor.item()
+        if verbose:
+            print(f"Loss: {loss}")
 
         if monitor_kl:
             final_policy_log_probs = self.get_policy_log_probs(
@@ -491,11 +486,10 @@ class Learner:
             self.learner_stats["ref_kls"].append(kl_ref)
             self.learner_stats["old_kls"].append(kl_old)
 
-        avg_loss = total_loss / steps_per_rollout
         avg_reward = float(torch.cat([traj.rewards for traj in trajectories]).mean())
-        self.learner_stats["losses"].append(avg_loss)
+        self.learner_stats["losses"].append(loss)
         self.learner_stats["avg_train_rewards"].append(avg_reward)
-        return avg_loss
+        return loss
 
     def get_weights(self) -> dict[str, Any]:
         """
@@ -620,6 +614,14 @@ class ColocatedWorker(Generator, Learner, ReferenceModel):
     ) -> dict[str, Any]:
         """Perform one complete training step: generate rollout + update policy."""
 
+        num_prompts = len(prompts)
+        if num_prompts % self.steps_per_rollout != 0:
+            raise ValueError(
+                f"Number of prompts {num_prompts} must be divisible by "
+                f"steps_per_rollout {self.steps_per_rollout}"
+            )
+        prompts_per_step = num_prompts // self.steps_per_rollout
+
         # Generate trajectories for the batch of prompts
         self.sync_generator()
         rollout_start = time.perf_counter()
@@ -640,14 +642,25 @@ class ColocatedWorker(Generator, Learner, ReferenceModel):
         # Update policy using GRPO
         self.sync_learner()
         update_start = time.perf_counter()
-        loss = self.update_policy(
-            trajectories,
-            self.steps_per_rollout,
-            monitor_kl=monitor_kl,
-            ref_log_probs=ref_log_probs,
-            val_prompts=self.prompts_val,
-            verbose=verbose,
-        )
+        final_loss: float | None = None
+        for step in range(self.steps_per_rollout):
+            traj_id_start = step * prompts_per_step
+            traj_id_end = traj_id_start + prompts_per_step
+            sub_trajs = trajectories[traj_id_start:traj_id_end]
+            sub_ref_probs = (
+                ref_log_probs[traj_id_start:traj_id_end]
+                if ref_log_probs is not None
+                else None
+            )
+            loss = self.update_policy(
+                sub_trajs,
+                self.steps_per_rollout,
+                monitor_kl=monitor_kl,
+                ref_log_probs=sub_ref_probs,
+                val_prompts=self.prompts_val,
+                verbose=verbose,
+            )
+            final_loss = loss
         self.sync_learner()
         update_end = time.perf_counter()
 
@@ -658,7 +671,7 @@ class ColocatedWorker(Generator, Learner, ReferenceModel):
         self.sync_generator()
         transfer_end = time.perf_counter()
 
-        self.step_count += 1
+        self.step_count += self.steps_per_rollout
 
         total_time_ms = (transfer_end - rollout_start) * 1000
         rollout_time_ms = (rollout_end - rollout_start) * 1000
@@ -676,7 +689,7 @@ class ColocatedWorker(Generator, Learner, ReferenceModel):
 
         return {
             "step": self.step_count,
-            "loss": loss,
+            "loss": final_loss,
             "num_trajectories": len(trajectories),
             "avg_reward": (
                 float(torch.cat([traj.rewards for traj in trajectories]).mean())
@@ -755,7 +768,7 @@ def run_training(
         result_dir (str): Directory to save results.
         num_steps (int): Number of training steps to perform.
         num_workers (int): Number of colocated workers to use.
-        prompts_per_batch (int): Number of prompts per batch.
+        prompts_per_batch (int): Number of prompts per training batch.
         num_val_prompts (int): Number of validation prompts.
         steps_per_rollout (int): Number of training steps per rollout.
         monitor_kl (bool): Whether to monitor KL divergence.
@@ -765,6 +778,8 @@ def run_training(
         raise ValueError("Only supports a single colocated worker")
     if prompts_per_batch <= 0 or num_val_prompts <= 0:
         raise ValueError("prompts_per_batch and num_val_prompts must be positive")
+    if num_steps % steps_per_rollout != 0:
+        raise ValueError("num_steps must be divisible by steps_per_rollout")
 
     # Define training prompts
     train_kw_filename = "train_keywords.txt"
@@ -785,7 +800,9 @@ def run_training(
             len(keywords), size=num_val_prompts, replace=False
         )
         keywords_val = [keywords[i] for i in val_indices]
-        keywords_train = [keywords[i] for i in range(len(keywords)) if i not in val_indices]
+        keywords_train = [
+            keywords[i] for i in range(len(keywords)) if i not in val_indices
+        ]
 
         # Save train/val split
         with open(train_kw_path, "w") as f:
@@ -815,10 +832,11 @@ def run_training(
     )
 
     set_seed()
-    for step in range(num_steps):
+    prompts_per_rollout_batch = prompts_per_batch * steps_per_rollout
+    for step in range(0, num_steps, steps_per_rollout):
         # Sample keywords (single keyword per prompt)
         kws_batch = np.random.choice(
-            keywords_train, size=prompts_per_batch, replace=False
+            keywords_train, size=prompts_per_rollout_batch, replace=False
         )
         prompts_train = [make_keyword_inclusion_prompt([kw]) for kw in kws_batch]
         # Perform training step
@@ -828,8 +846,12 @@ def run_training(
             )
         )
         print(f"Step {step}: {step_stats}")
-        if (step + 1) % ckpt_interval == 0:
-            ray.get(worker.save_ckpt.remote(result_dir, step + 1))
+        should_save = any(
+            (step + substep) % ckpt_interval == 0
+            for substep in range(1, steps_per_rollout + 1)
+        )
+        if should_save:
+            ray.get(worker.save_ckpt.remote(result_dir, step + steps_per_rollout))
 
     # Get final statistics
     stats: dict[str, Any] = ray.get(worker.get_statistics.remote(result_dir))
@@ -875,7 +897,10 @@ if __name__ == "__main__":
         "--keywords_file", type=str, required=True, help="Path to keywords file"
     )
     parser.add_argument(
-        "--train_val_kw_split_dir", type=str, required=True, help="Directory for train/val keyword split"
+        "--train_val_kw_split_dir",
+        type=str,
+        required=True,
+        help="Directory for train/val keyword split",
     )
     parser.add_argument(
         "--ckpt_file", type=str, required=True, help="Path to model checkpoint"

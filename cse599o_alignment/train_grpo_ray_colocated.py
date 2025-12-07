@@ -852,9 +852,12 @@ def run_training(
     num_warmup_steps = steps_per_rollout
     for step in range(0, num_warmup_steps + num_steps, steps_per_rollout):
         # Sample keywords (single keyword per prompt)
-        kws_batch = np.random.choice(
-            keywords_train, size=prompts_per_rollout_batch, replace=False
-        )
+        if not profile:
+            kws_batch = np.random.choice(
+                keywords_train, size=prompts_per_rollout_batch, replace=False
+            )
+        else:
+            kws_batch = [keywords_train[0]] * prompts_per_rollout_batch
         prompts_train = [make_keyword_inclusion_prompt([kw]) for kw in kws_batch]
         # Perform training step
         warmup = step < num_warmup_steps

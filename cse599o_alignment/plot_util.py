@@ -1,5 +1,7 @@
+from typing import Callable
 import matplotlib.pyplot as plt
 import numpy as np
+
 
 def plot_kl_rewards(
     ref_kls: list[float],
@@ -38,3 +40,241 @@ def plot_kl_rewards(
     plt.legend()
     plt.savefig(out_file)
     plt.close()
+
+
+def grep_stats(
+    log_path: str, key_fn: Callable[[str], bool] | None = None
+) -> list[dict[str, float]]:
+    """
+    Extract per-iteration statistics from a log file.
+
+    Args:
+        log_path (str): Path to the log file.
+        key_fn (Callable[[str], bool] | None): Optional function to filter keys.
+
+    Returns:
+        list[dict[str, float]]: List of dictionaries containing statistics
+            per iteration.
+    """
+    # Format:
+    # Step <step>: {<dict[str, float | stat_str]>}
+    # stat_str := <float> (<pct>%)
+    stats_list = []
+    with open(log_path, "r") as f:
+        for line in f:
+            if not line.startswith("Step "):
+                continue
+            # Remove single quotes
+            line = line.replace("'", "")
+            # Extract the dictionary string
+            left_brace = line.index("{")
+            right_brace = line.index("}")
+            stat_str = line[left_brace + 1 : right_brace]
+            # Extract key-value pairs
+            stat_items = stat_str.split(", ")
+            stat_dict: dict[str, float] = {}
+            for item in stat_items:
+                key, val_str = item.split(": ")
+                # Skip keys that do not satisfy key_fn
+                if key_fn is not None and not key_fn(key):
+                    continue
+                if "(" in val_str:
+                    val = float(val_str.split(" (")[0])
+                else:
+                    val = float(val_str)
+                stat_dict[key] = val
+            stats_list.append(stat_dict)
+    return stats_list
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+from typing import Callable
+
+
+def plot_time_breakdown(log_path: str) -> None:
+    """
+    Plot time breakdown from a log file.
+
+    Args:
+        log_path (str): Path to the log file containing time breakdown data.
+    """
+    time_key_fn = lambda key: "time_ms" in key
+    time_stats_list = grep_stats(log_path, key_fn=time_key_fn)
+    if not time_stats_list:
+        return
+
+    total_key = "total_time_ms"
+    breakdown_keys = [
+        "rollout_time_ms",
+        "update_time_ms",
+        "transfer_time_ms",
+        "reference_time_ms",
+    ]
+    other_key = "other_time_ms"
+    breakdown_stats = {}
+    for key in breakdown_keys:
+        times = [stats[key] for stats in time_stats_list]
+        if all(t == 0 for t in times):
+            continue
+        breakdown_stats[key] = times
+    total_times = [stats[total_key] for stats in time_stats_list]
+    other_times = []
+    for i in range(len(time_stats_list)):
+        sum_time = sum(breakdown_stats[key][i] for key in breakdown_stats.keys())
+        other_times.append(total_times[i] - sum_time)
+    breakdown_stats[other_key] = other_times
+    breakdown_keys = [key for key in breakdown_keys if key in breakdown_stats]
+    breakdown_keys.append(other_key)
+    total_times = np.array(total_times, dtype=float) / 1000.0
+    for key in breakdown_stats:
+        breakdown_stats[key] = [t / 1000.0 for t in breakdown_stats[key]]
+
+    num_iters = len(time_stats_list)
+    bar_width = 0.6
+    color_map = {
+        "rollout_time_ms": "#1f77b4",
+        "update_time_ms": "#ff7f0e",
+        "transfer_time_ms": "#2ca02c",
+        "reference_time_ms": "#d62728",
+        "other_time_ms": "#9467bd",
+    }
+
+    fig, ax = plt.subplots(figsize=(max(6, num_iters * 0.4), 6))
+    iters = np.arange(1, num_iters + 1)
+    bottom = np.zeros(num_iters, dtype=float)
+    for key in breakdown_keys:
+        vals = np.array(breakdown_stats[key], dtype=float)
+        ax.bar(
+            iters,
+            vals,
+            bar_width,
+            bottom=bottom,
+            label=key,
+            align="center",
+            edgecolor="black",
+            linewidth=0.3,
+            color=color_map[key],
+        )
+        bottom += vals
+
+    for x, total in zip(iters, total_times):
+        ax.text(
+            x,
+            total,
+            f"{total:.2f}",
+            ha="center",
+            va="bottom",
+            fontsize=8,
+            rotation=0,
+        )
+
+    ax.set_xticks(iters)
+    ax.set_xticklabels([str(i) for i in iters], rotation=0)
+    ax.set_xlabel("Iteration")
+    ax.set_ylabel("Time (s)")
+    ax.set_title("Time Breakdown per Iteration")
+    ax.margins(x=0.05)
+
+    key_to_name: Callable[[str], str] = (
+        lambda s: s.replace("_time_ms", "").replace("_", " ").title()
+    )
+    handles, _ = ax.get_legend_handles_labels()
+    labels = [key_to_name(k) for k in breakdown_keys]
+    ax.legend(handles, labels, loc="upper right", fontsize=8)
+
+    fig.tight_layout()
+
+    out_path_bar = log_path + ".time_breakdown.png"
+    fig.savefig(out_path_bar, dpi=150)
+    plt.close(fig)
+
+    breakdown_sums = np.array([sum(breakdown_stats[k]) for k in breakdown_keys])
+    colors = [color_map[k] for k in breakdown_keys]
+    plot_time_breakdown_pie(
+        breakdown_sums,
+        labels,
+        colors,
+        "Time Breakdown (All Iterations)",
+        log_path + ".time_breakdown_pie_all.png",
+    )
+
+    # All iterations except first (skip warmup)
+    if num_iters > 1:
+        breakdown_first = np.array([breakdown_stats[k][0] for k in breakdown_keys])
+        breakdown_sums_wo_first = breakdown_sums - breakdown_first
+        plot_time_breakdown_pie(
+            breakdown_sums_wo_first,
+            labels,
+            colors,
+            "Time Breakdown (All Iterations Except First)",
+            log_path + ".time_breakdown_pie.png",
+        )
+
+
+def plot_time_breakdown_pie(
+    breakdown: np.ndarray,
+    labels: list[str],
+    colors: list[str],
+    title: str,
+    out_file: str,
+) -> None:
+    """
+    Plot a pie chart for time breakdown.
+
+    Args:
+        breakdown (np.ndarray): Array of time breakdown values.
+        labels (list[str]): List of labels for each segment.
+        colors (list[str]): List of colors for each segment.
+        title (str): Title of the pie chart.
+        out_file (str): Output file path to save the plot.
+    """
+    total = breakdown.sum()
+    percents = breakdown / total * 100.0
+    mask = percents >= 0.01
+    breakdown = breakdown[mask]
+    percents = percents[mask]
+    labels = [lab for lab, keep in zip(labels, mask) if keep]
+    colors = [col for col, keep in zip(colors, mask) if keep]
+
+    legend_labels = [f"{lab} ({p:.2f}%)" for lab, p in zip(labels, percents)]
+    pct_eps = 3
+    explode = [0.08 if p > 0 and p < pct_eps else 0.0 for p in percents]
+
+    fig, ax = plt.subplots(figsize=(6, 4))
+    wedges, _ = ax.pie(
+        breakdown,
+        labels=None,
+        colors=colors,
+        startangle=90,
+        explode=explode,
+    )
+    ax.axis("equal")
+    ax.set_title(title)
+
+    # Legend instead of on-slice labels
+    ax.legend(
+        wedges,
+        legend_labels,
+        loc="center left",
+        bbox_to_anchor=(1.0, 0.5),
+        fontsize=9,
+    )
+
+    fig.tight_layout()
+    fig.savefig(out_file, dpi=150)
+    plt.close(fig)
+
+
+if __name__ == "__main__":
+    from argparse import ArgumentParser
+
+    parser = ArgumentParser()
+    parser.add_argument("--mode", type=str, required=True, choices=["time_breakdown"])
+    parser.add_argument("--log_path", type=str, default=None)
+    args = parser.parse_args()
+
+    if args.mode == "time_breakdown":
+        if args.log_path is None:
+            raise ValueError("log_path must be provided for time_breakdown mode")
+        plot_time_breakdown(args.log_path)

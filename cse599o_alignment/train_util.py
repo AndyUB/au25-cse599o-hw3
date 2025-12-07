@@ -248,9 +248,10 @@ def batch_generate_responses(
                 next_token_prob = float(next_token_probs[i].item())
                 log_probs[rollout_id].append(next_token_prob)
 
-        input_ids = torch.cat(
-            [input_ids, torch.unsqueeze(next_token_ids, dim=1)], dim=1
-        )  # (num_valid, seq_len+1)
+        next_token_positions = next_token_positions + 1  # (new num_valid,)
+        pad_column = torch.zeros((num_valid, 1), dtype=torch.long, device=device)
+        input_ids = torch.cat([input_ids, pad_column], dim=1)  # (num_valid, seq_len+1)
+        input_ids[batch_dim_idx, next_token_positions] = next_token_ids
 
         discard_oup_result = discard_eot_outputs(
             input_ids, tokenizer.eot_token, next_token_positions, rollout_ids
@@ -259,7 +260,6 @@ def batch_generate_responses(
             break
         # (new num_valid, seq_len+1), (new num_valid,), (new num_valid,)
         input_ids, next_token_positions, rollout_ids = discard_oup_result
-        next_token_positions = next_token_positions + 1  # (new num_valid,)
 
     return generated_tokens, log_probs
 

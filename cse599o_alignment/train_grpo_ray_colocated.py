@@ -392,7 +392,7 @@ class Learner:
                 prompt=prompt,
                 grouped_tokens=[tokens],
             )
-            response, reward = responses[0], reward[0]
+            response, reward = response[0], reward[0]
             total_reward += reward
             responses.append(response)
 
@@ -734,6 +734,7 @@ class ColocatedWorker(Generator, Learner, ReferenceModel):
 
 def run_training(
     keywords_file: str,
+    train_val_kw_dir: str,
     ckpt_file: str,
     result_dir: str,
     num_steps: int = 10,
@@ -762,15 +763,48 @@ def run_training(
     """
     if num_workers != 1:
         raise ValueError("Only supports a single colocated worker")
+    if prompts_per_batch <= 0 or num_val_prompts <= 0:
+        raise ValueError("prompts_per_batch and num_val_prompts must be positive")
 
     # Define training prompts
-    with open(keywords_file, "r") as f:
-        keywords = [line.strip() for line in f.readlines() if line.strip()]
-    # Last num_val_prompts keywords are used for validation
-    if num_val_prompts + prompts_per_batch > len(keywords):
-        raise ValueError("Not enough keywords for training and validation")
-    keywords_train = keywords[:-num_val_prompts]
-    keywords_val = keywords[-num_val_prompts:]
+    train_kw_filename = "train_keywords.txt"
+    val_kw_filename = "val_keywords.txt"
+    train_kw_path = os.path.join(train_val_kw_dir, train_kw_filename)
+    val_kw_path = os.path.join(train_val_kw_dir, val_kw_filename)
+    if any(not os.path.exists(p) for p in [train_kw_path, val_kw_path]):
+        os.makedirs(train_val_kw_dir, exist_ok=True)
+        with open(keywords_file, "r") as f:
+            keywords = [line.strip() for line in f.readlines() if line.strip()]
+        # num_val_prompts keywords are used for validation
+        if num_val_prompts + prompts_per_batch > len(keywords):
+            raise ValueError("Not enough keywords for training and validation")
+
+        # randomly select validation keywords, set seed for reproducibility
+        np.random.seed(599)
+        val_indices = np.random.choice(
+            len(keywords), size=num_val_prompts, replace=False
+        )
+        keywords_val = [keywords[i] for i in val_indices]
+        keywords_train = [keywords[i] for i in range(len(keywords)) if i not in val_indices]
+
+        # Save train/val split
+        with open(train_kw_path, "w") as f:
+            for kw in keywords_train:
+                f.write(f"{kw}\n")
+        with open(val_kw_path, "w") as f:
+            for kw in keywords_val:
+                f.write(f"{kw}\n")
+    else:
+        with open(train_kw_path, "r") as f:
+            keywords_train = [line.strip() for line in f.readlines() if line.strip()]
+        with open(val_kw_path, "r") as f:
+            keywords_val = [line.strip() for line in f.readlines() if line.strip()]
+
+        if len(keywords_train) < prompts_per_batch:
+            raise ValueError("Not enough training keywords in the provided split")
+        if len(keywords_val) < num_val_prompts:
+            raise ValueError("Not enough validation keywords in the provided split")
+
     prompts_val = [make_keyword_inclusion_prompt([kw]) for kw in keywords_val]
 
     # Create workers
@@ -804,6 +838,7 @@ def run_training(
 
 def run_once(
     keywords_file: str,
+    train_val_kw_dir: str,
     ckpt_file: str,
     result_dir: str,
     num_steps: int = 10,
@@ -818,6 +853,7 @@ def run_once(
     """Entry point for training."""
     run_training(
         keywords_file=keywords_file,
+        train_val_kw_dir=train_val_kw_dir,
         ckpt_file=ckpt_file,
         result_dir=result_dir,
         num_steps=num_steps,
@@ -837,6 +873,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--keywords_file", type=str, required=True, help="Path to keywords file"
+    )
+    parser.add_argument(
+        "--train_val_kw_split_dir", type=str, required=True, help="Directory for train/val keyword split"
     )
     parser.add_argument(
         "--ckpt_file", type=str, required=True, help="Path to model checkpoint"
@@ -903,6 +942,7 @@ if __name__ == "__main__":
     try:
         run_once(
             keywords_file=args.keywords_file,
+            train_val_kw_dir=args.train_val_kw_split_dir,
             ckpt_file=args.ckpt_file,
             result_dir=args.result_dir,
             num_steps=args.steps,

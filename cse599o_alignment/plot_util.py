@@ -1,6 +1,8 @@
 from typing import Callable
 import matplotlib.pyplot as plt
 import numpy as np
+import os
+import json
 
 
 def plot_kl_rewards(
@@ -43,7 +45,9 @@ def plot_kl_rewards(
 
 
 def grep_stats(
-    log_path: str, key_fn: Callable[[str], bool] | None = None
+    log_path: str,
+    key_fn: Callable[[str], bool] | None = None,
+    skip_line_fn: Callable[[str], bool] | None = None,
 ) -> list[dict[str, float]]:
     """
     Extract per-iteration statistics from a log file.
@@ -51,6 +55,7 @@ def grep_stats(
     Args:
         log_path (str): Path to the log file.
         key_fn (Callable[[str], bool] | None): Optional function to filter keys.
+        skip_line_fn (Callable[[str], bool] | None): Optional function to skip lines.
 
     Returns:
         list[dict[str, float]]: List of dictionaries containing statistics
@@ -63,6 +68,8 @@ def grep_stats(
     with open(log_path, "r") as f:
         for line in f:
             if not line.startswith("Step "):
+                continue
+            if skip_line_fn is not None and skip_line_fn(line):
                 continue
             # Remove single quotes
             line = line.replace("'", "")
@@ -87,9 +94,13 @@ def grep_stats(
     return stats_list
 
 
-import numpy as np
-import matplotlib.pyplot as plt
-from typing import Callable
+COLOR_MAP = {
+    "rollout_time_ms": "#1f77b4",
+    "update_time_ms": "#ff7f0e",
+    "transfer_time_ms": "#2ca02c",
+    "reference_time_ms": "#d62728",
+    "other_time_ms": "#9467bd",
+}
 
 
 def plot_time_breakdown(log_path: str) -> None:
@@ -132,13 +143,6 @@ def plot_time_breakdown(log_path: str) -> None:
 
     num_iters = len(time_stats_list)
     bar_width = 0.6
-    color_map = {
-        "rollout_time_ms": "#1f77b4",
-        "update_time_ms": "#ff7f0e",
-        "transfer_time_ms": "#2ca02c",
-        "reference_time_ms": "#d62728",
-        "other_time_ms": "#9467bd",
-    }
 
     fig, ax = plt.subplots(figsize=(max(6, num_iters * 0.4), 6))
     iters = np.arange(1, num_iters + 1)
@@ -154,7 +158,7 @@ def plot_time_breakdown(log_path: str) -> None:
             align="center",
             edgecolor="black",
             linewidth=0.3,
-            color=color_map[key],
+            color=COLOR_MAP[key],
         )
         bottom += vals
 
@@ -190,7 +194,7 @@ def plot_time_breakdown(log_path: str) -> None:
     plt.close(fig)
 
     breakdown_sums = np.array([sum(breakdown_stats[k]) for k in breakdown_keys])
-    colors = [color_map[k] for k in breakdown_keys]
+    colors = [COLOR_MAP[k] for k in breakdown_keys]
     plot_time_breakdown_pie(
         breakdown_sums,
         labels,
@@ -266,15 +270,152 @@ def plot_time_breakdown_pie(
     plt.close(fig)
 
 
+def plot_time_series(log_dir: str) -> None:
+    """
+    Plot a time series from log files in the specified directory.
+
+    Args:
+        log_dir (str): Directory containing log files.
+    """
+    if not os.path.isdir(log_dir):
+        raise ValueError(f"{log_dir} is not a valid directory")
+
+    time_keys = ["rollout_time_ms", "update_time_ms", "transfer_time_ms"]
+    time_key_fn = lambda key: key in time_keys
+    skip_warmup_fn = lambda line: "warmup=True" in line
+    time_key_to_name = {
+        "rollout_time_ms": "Rollout Generation",
+        "update_time_ms": "Policy Update",
+        "transfer_time_ms": "Weight Synchronization",
+    }
+
+    # k -> list of (time_key, time_start, time_end)
+    k_to_time_series: dict[int, list[tuple[str, float, float]]] = {}
+    # get log files ending with .log
+    log_files = [f for f in os.listdir(log_dir) if f.endswith(".log")]
+    hyperparams_found = False
+    prompts_per_step: int | None = None
+    num_steps: int | None = None
+    for log_file in log_files:
+        if "-k" not in log_file:
+            continue
+        k_str = log_file.split("-k")[-1].split(".log")[0]
+        try:
+            k = int(k_str)
+        except ValueError:
+            continue
+
+        log_path = os.path.join(log_dir, log_file)
+        stats_list = grep_stats(
+            log_path, key_fn=time_key_fn, skip_line_fn=skip_warmup_fn
+        )
+
+        if not hyperparams_found:
+            with open(log_path, "r") as f:
+                # first line contains hyperparameters
+                first_line = f.readline()
+                left_paren = first_line.index("(")
+                right_paren = first_line.index(")")
+                hyperparam_str = first_line[left_paren + 1 : right_paren]
+                hyperparam_items = hyperparam_str.split(", ")
+                for item in hyperparam_items:
+                    hyperparam_key, hyperparam_val = item.split("=")
+                    if hyperparam_key == "prompts_per_batch":
+                        prompts_per_step = int(hyperparam_val)
+                    elif hyperparam_key == "steps":
+                        num_steps = int(hyperparam_val)
+                if prompts_per_step is not None and num_steps is not None:
+                    hyperparams_found = True
+
+        time_series = []
+        global_time = 0.0
+        for stats in stats_list:
+            for time_key in time_keys:
+                time_val = stats.get(time_key, 0.0) / 1000.0  # convert to seconds
+                time_start = global_time
+                time_end = global_time + time_val
+                time_series.append((time_key, time_start, time_end))
+                global_time = time_end
+        k_to_time_series[k] = time_series
+
+    # Plot time series for each k on the same plot
+    # x-axis: time (s)
+    # y-axis: for each k, a horizontal bar with segments
+    # Each segment colored by time_key, starting from time_start to time_end
+    fig, ax = plt.subplots(figsize=(14, 3))
+    y_ticks = []
+    y_tick_labels = []
+    for i, (k, time_series) in enumerate(sorted(k_to_time_series.items())):
+        y = 0.25 * i
+        y_ticks.append(y)
+        y_tick_labels.append(f"k={k}")
+        for time_key, time_start, time_end in time_series:
+            ax.barh(
+                y,
+                time_end - time_start,
+                left=time_start,
+                height=0.2,
+                label=time_key,
+                align="center",
+                color=COLOR_MAP[time_key],
+            )
+
+    ax.set_yticks(y_ticks)
+    ax.set_yticklabels(y_tick_labels)
+    ax.set_xlabel("Time (s)")
+    title = "Training Timelines"
+    if hyperparams_found:
+        title += f" ({num_steps} steps, {prompts_per_step} prompts/step)"
+    ax.set_title(title)
+    handles, labels = ax.get_legend_handles_labels()
+    uniqs = {}
+    for h, l in zip(handles, labels):
+        l = time_key_to_name[l]
+        if l not in uniqs:
+            uniqs[l] = h
+    ax.legend(uniqs.values(), uniqs.keys(), loc="upper right")
+    fig.tight_layout()
+    fig.savefig(os.path.join(log_dir, "time_series.png"), dpi=150)
+    plt.close(fig)
+
+    k_to_total_time = {
+        k: time_series[-1][2] for k, time_series in k_to_time_series.items()
+    }
+    sync_total_time = k_to_total_time[1]
+    k_to_speedup_stats = {}
+    for k, total_time in k_to_total_time.items():
+        speedup = sync_total_time / total_time
+        speedup_stats = {
+            "total_time_s": total_time,
+            "speedup_ratio": speedup,
+        }
+        if hyperparams_found:
+            # Samples per second, 4 samples per prompt
+            throughput = (prompts_per_step * num_steps * 4) / total_time
+            speedup_stats["throughput_samples_per_s"] = throughput
+        k_to_speedup_stats[k] = speedup_stats
+
+    stats_path = os.path.join(log_dir, "speedup_stats.json")
+    with open(stats_path, "w") as f:
+        json.dump(k_to_speedup_stats, f, indent=4)
+
+
 if __name__ == "__main__":
     from argparse import ArgumentParser
 
     parser = ArgumentParser()
-    parser.add_argument("--mode", type=str, required=True, choices=["time_breakdown"])
+    parser.add_argument(
+        "--mode", type=str, required=True, choices=["time_breakdown", "time_series"]
+    )
     parser.add_argument("--log_path", type=str, default=None)
+    parser.add_argument("--log_dir", type=str, default=None)
     args = parser.parse_args()
 
     if args.mode == "time_breakdown":
         if args.log_path is None:
             raise ValueError("log_path must be provided for time_breakdown mode")
         plot_time_breakdown(args.log_path)
+    elif args.mode == "time_series":
+        if args.log_dir is None:
+            raise ValueError("log_dir must be provided for time_series mode")
+        plot_time_series(args.log_dir)

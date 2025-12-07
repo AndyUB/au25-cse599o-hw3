@@ -1,0 +1,22 @@
+{
+    "2": {
+        "total_time_s": 11.947155144938733,
+        "speedup_ratio": 1.7891589443722926,
+        "throughput_samples_per_s": 10.713847643823863
+    },
+    "4": {
+        "total_time_s": 7.317600893089548,
+        "speedup_ratio": 2.9210884550367635,
+        "throughput_samples_per_s": 17.492071769161136
+    },
+    "1": {
+        "total_time_s": 21.375359487370588,
+        "speedup_ratio": 1.0,
+        "throughput_samples_per_s": 5.988203383228595
+    },
+    "8": {
+        "total_time_s": 5.234041984833311,
+        "speedup_ratio": 4.083910589427824,
+        "throughput_samples_per_s": 24.455287208414784
+    }
+}

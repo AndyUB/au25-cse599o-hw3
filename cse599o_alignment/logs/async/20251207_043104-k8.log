@@ -1,0 +1,86 @@
+Args: Namespace(keywords_file='cse599o_alignment/prompts/keywords.txt', train_val_kw_split_dir='cse599o_alignment/prompts/', ckpt_file='cse599o_alignment/ckpt/model.pt', result_dir='cse599o_alignment/results/async/20251207_043104/k8', steps=16, workers=1, prompts_per_batch=32, num_val_prompts=32, steps_per_rollout=8, ckpt_interval=100, monitor_kl=False, verbose=True).
+2025-12-07 04:38:53,107	INFO worker.py:2012 -- Started a local Ray instance.
+2025-12-07 04:38:53,462	INFO packaging.py:588 -- Creating a file package for local module '/homes/iws/yhruan22/au25-cse599o-hw3'.
+2025-12-07 04:38:53,513	WARNING packaging.py:430 -- File /homes/iws/yhruan22/au25-cse599o-hw3/cse599o_alignment/ckpt/model.pt is very large (243.85MiB). Consider adding this file to the 'excludes' list to skip uploading it: `ray.init(..., runtime_env={'excludes': ['/homes/iws/yhruan22/au25-cse599o-hw3/cse599o_alignment/ckpt/model.pt']})`
+2025-12-07 04:38:55,964	INFO packaging.py:380 -- Pushing file package 'gcs://_ray_pkg_4dcd3afceba69a31.zip' (245.58MiB) to Ray cluster...
+2025-12-07 04:38:56,652	INFO packaging.py:393 -- Successfully pushed file package 'gcs://_ray_pkg_4dcd3afceba69a31.zip'.
+/homes/iws/yhruan22/au25-cse599o-hw3/.venv/lib64/python3.12/site-packages/ray/_private/worker.py:2051: FutureWarning: Tip: In future versions of Ray, Ray will no longer override accelerator visible devices env var if num_gpus=0 or num_gpus=None (default). To enable this behavior and turn off this error message, set RAY_ACCEL_ENV_VAR_OVERRIDE_ON_ZERO=0
+  warnings.warn(
+Ray initialized.
+[33m(raylet)[0m warning: `VIRTUAL_ENV=/homes/iws/yhruan22/au25-cse599o-hw3/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+[33m(raylet)[0m Using CPython 3.12.9 interpreter at: /usr/bin/python3
+[33m(raylet)[0m Creating virtual environment at: .venv
+[33m(raylet)[0m    Building alignment @ file:///homes/iws/yhruan22/raytmp/session_2025-12-07_04-38-48_754308_2143575/runtime_resources/working_dir_files/_ray_pkg_4dcd3afceba69a31
+[33m(raylet)[0m    Building cse599o-basics @ file:///homes/iws/yhruan22/raytmp/session_2025-12-07_04-38-48_754308_2143575/runtime_resources/working_dir_files/_ray_pkg_4dcd3afceba69a31/cse599o-basics
+[33m(raylet)[0m       Built cse599o-basics @ file:///homes/iws/yhruan22/raytmp/session_2025-12-07_04-38-48_754308_2143575/runtime_resources/working_dir_files/_ray_pkg_4dcd3afceba69a31/cse599o-basics
+[33m(raylet)[0m       Built alignment @ file:///homes/iws/yhruan22/raytmp/session_2025-12-07_04-38-48_754308_2143575/runtime_resources/working_dir_files/_ray_pkg_4dcd3afceba69a31
+[33m(raylet)[0m Installed 205 packages in 5.16s
+[36m(pid=gcs_server)[0m [2025-12-07 04:39:19,449 E 2143779 2143779] (gcs_server) gcs_server.cc:302: Failed to establish connection to the event+metrics exporter agent. Events and metrics will not be exported. Exporter agent status: RpcError: Running out of retries to initialize the metrics agent. rpc_code: 14
+[33m(raylet)[0m [2025-12-07 04:39:22,221 E 2144033 2144033] (raylet) main.cc:975: Failed to establish connection to the metrics exporter agent. Metrics will not be exported. Exporter agent status: RpcError: Running out of retries to initialize the metrics agent. rpc_code: 14
+[36m(pid=2144453)[0m [2025-12-07 04:39:27,311 E 2144453 2145119] core_worker_process.cc:825: Failed to establish connection to the metrics exporter agent. Metrics will not be exported. Exporter agent status: RpcError: Running out of retries to initialize the metrics agent. rpc_code: 14
+[2025-12-07 04:39:27,602 E 2143575 2144437] core_worker_process.cc:825: Failed to establish connection to the metrics exporter agent. Metrics will not be exported. Exporter agent status: RpcError: Running out of retries to initialize the metrics agent. rpc_code: 14
+[36m(ColocatedWorker pid=2147301)[0m [2025-12-07 04:39:43,244 E 2147301 2147440] core_worker_process.cc:825: Failed to establish connection to the metrics exporter agent. Metrics will not be exported. Exporter agent status: RpcError: Running out of retries to initialize the metrics agent. rpc_code: 14[32m [repeated 39x across cluster] (Ray deduplicates logs by default. Set RAY_DEDUP_LOGS=0 to disable log deduplication, or see https://docs.ray.io/en/master/ray-observability/user-guides/configure-logging.html#log-deduplication for more options.)[0m
+Ray shutdown.
+Traceback (most recent call last):
+  File "/homes/iws/yhruan22/au25-cse599o-hw3/cse599o_alignment/train_grpo_ray_colocated.py", line 968, in <module>
+    run_once(
+  File "/homes/iws/yhruan22/au25-cse599o-hw3/cse599o_alignment/train_grpo_ray_colocated.py", line 876, in run_once
+    run_training(
+  File "/homes/iws/yhruan22/au25-cse599o-hw3/cse599o_alignment/train_grpo_ray_colocated.py", line 843, in run_training
+    step_stats = ray.get(
+                 ^^^^^^^^
+  File "/homes/iws/yhruan22/au25-cse599o-hw3/.venv/lib64/python3.12/site-packages/ray/_private/auto_init_hook.py", line 22, in auto_init_wrapper
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/homes/iws/yhruan22/au25-cse599o-hw3/.venv/lib64/python3.12/site-packages/ray/_private/client_mode_hook.py", line 104, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/homes/iws/yhruan22/au25-cse599o-hw3/.venv/lib64/python3.12/site-packages/ray/_private/worker.py", line 2961, in get
+    values, debugger_breakpoint = worker.get_objects(
+                                  ^^^^^^^^^^^^^^^^^^^
+  File "/homes/iws/yhruan22/au25-cse599o-hw3/.venv/lib64/python3.12/site-packages/ray/_private/worker.py", line 1026, in get_objects
+    raise value.as_instanceof_cause()
+ray.exceptions.RayTaskError(OutOfMemoryError): [36mray::ColocatedWorker.training_step()[39m (pid=2147301, ip=172.28.1.28, actor_id=c5d7646b0c1653ae8a1f4c8d01000000, repr=<train_grpo_ray_colocated.ColocatedWorker object at 0x7fdf616a8ad0>)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/homes/iws/yhruan22/au25-cse599o-hw3/cse599o_alignment/train_grpo_ray_colocated.py", line 628, in training_step
+    trajectories = self.generate_trajectories(prompts, verbose=verbose)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/homes/iws/yhruan22/au25-cse599o-hw3/.venv/lib64/python3.12/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/homes/iws/yhruan22/au25-cse599o-hw3/cse599o_alignment/train_grpo_ray_colocated.py", line 206, in generate_trajectories
+    generated_tokens_list, log_probs_list = batch_generate_responses(
+                                            ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/homes/iws/yhruan22/raytmp/session_2025-12-07_04-38-48_754308_2143575/runtime_resources/working_dir_files/_ray_pkg_4dcd3afceba69a31/.venv/lib64/python3.12/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/homes/iws/yhruan22/raytmp/session_2025-12-07_04-38-48_754308_2143575/runtime_resources/working_dir_files/_ray_pkg_4dcd3afceba69a31/cse599o_alignment/train_util.py", line 231, in batch_generate_responses
+    logits: torch.Tensor = model(input_ids)  # (num_valid, seq_len, vocab_size)
+                           ^^^^^^^^^^^^^^^^
+  File "/homes/iws/yhruan22/raytmp/session_2025-12-07_04-38-48_754308_2143575/runtime_resources/working_dir_files/_ray_pkg_4dcd3afceba69a31/.venv/lib64/python3.12/site-packages/torch/nn/modules/module.py", line 1739, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/homes/iws/yhruan22/raytmp/session_2025-12-07_04-38-48_754308_2143575/runtime_resources/working_dir_files/_ray_pkg_4dcd3afceba69a31/.venv/lib64/python3.12/site-packages/torch/nn/modules/module.py", line 1750, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/homes/iws/yhruan22/raytmp/session_2025-12-07_04-38-48_754308_2143575/runtime_resources/working_dir_files/_ray_pkg_4dcd3afceba69a31/cse599o-basics/cse599o_basics/model.py", line 576, in forward
+    logits = self.lm_head(x)
+             ^^^^^^^^^^^^^^^
+  File "/homes/iws/yhruan22/raytmp/session_2025-12-07_04-38-48_754308_2143575/runtime_resources/working_dir_files/_ray_pkg_4dcd3afceba69a31/.venv/lib64/python3.12/site-packages/torch/nn/modules/module.py", line 1739, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/homes/iws/yhruan22/raytmp/session_2025-12-07_04-38-48_754308_2143575/runtime_resources/working_dir_files/_ray_pkg_4dcd3afceba69a31/.venv/lib64/python3.12/site-packages/torch/nn/modules/module.py", line 1750, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/homes/iws/yhruan22/raytmp/session_2025-12-07_04-38-48_754308_2143575/runtime_resources/working_dir_files/_ray_pkg_4dcd3afceba69a31/cse599o-basics/cse599o_basics/model.py", line 37, in forward
+    output = einx.dot("... in, out in -> ... out", x, self.weight)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/homes/iws/yhruan22/raytmp/session_2025-12-07_04-38-48_754308_2143575/runtime_resources/working_dir_files/_ray_pkg_4dcd3afceba69a31/.venv/lib64/python3.12/site-packages/einx/traceback_util.py", line 71, in func_with_reraise
+    raise e.with_traceback(tb) from None
+  File "/homes/iws/yhruan22/raytmp/session_2025-12-07_04-38-48_754308_2143575/runtime_resources/working_dir_files/_ray_pkg_4dcd3afceba69a31/.venv/lib64/python3.12/site-packages/torch/functional.py", line 407, in einsum
+    return _VF.einsum(equation, operands)  # type: ignore[attr-defined]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 3, in op0
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 9.91 GiB. GPU 0 has a total capacity of 23.46 GiB of which 9.78 GiB is free. Including non-PyTorch memory, this process has 13.68 GiB memory in use. Of the allocated memory 11.12 GiB is allocated by PyTorch, and 2.36 GiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)

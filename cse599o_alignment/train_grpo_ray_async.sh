@@ -16,7 +16,7 @@ for k in "${ks[@]}"; do
         --result_dir $SUBDIR/results/async/$timestamp/k$k \
         --steps 16 \
         --steps_per_rollout $k \
-        --prompts_per_batch 32 \
+        --prompts_per_batch 8 \
         --ckpt_interval 100 \
         --verbose > $LOG_DIR/$timestamp-k$k.log 2>&1
         # --monitor_kl \

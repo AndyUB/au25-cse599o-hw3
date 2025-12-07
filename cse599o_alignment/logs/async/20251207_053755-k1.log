@@ -1,0 +1,247 @@
+Args: Namespace(keywords_file='cse599o_alignment/prompts/keywords.txt', train_val_kw_split_dir='cse599o_alignment/prompts/', ckpt_file='cse599o_alignment/ckpt/model.pt', result_dir='cse599o_alignment/results/async/20251207_053755/k1', steps=16, workers=1, prompts_per_batch=1, num_val_prompts=32, steps_per_rollout=1, ckpt_interval=100, monitor_kl=False, verbose=True).
+2025-12-07 05:38:13,176	INFO worker.py:2012 -- Started a local Ray instance.
+2025-12-07 05:38:13,563	INFO packaging.py:588 -- Creating a file package for local module '/homes/iws/yhruan22/au25-cse599o-hw3'.
+2025-12-07 05:38:13,619	WARNING packaging.py:430 -- File /homes/iws/yhruan22/au25-cse599o-hw3/cse599o_alignment/ckpt/model.pt is very large (243.85MiB). Consider adding this file to the 'excludes' list to skip uploading it: `ray.init(..., runtime_env={'excludes': ['/homes/iws/yhruan22/au25-cse599o-hw3/cse599o_alignment/ckpt/model.pt']})`
+2025-12-07 05:38:16,037	INFO packaging.py:380 -- Pushing file package 'gcs://_ray_pkg_540a7254c1db7960.zip' (245.58MiB) to Ray cluster...
+2025-12-07 05:38:16,709	INFO packaging.py:393 -- Successfully pushed file package 'gcs://_ray_pkg_540a7254c1db7960.zip'.
+/homes/iws/yhruan22/au25-cse599o-hw3/.venv/lib64/python3.12/site-packages/ray/_private/worker.py:2051: FutureWarning: Tip: In future versions of Ray, Ray will no longer override accelerator visible devices env var if num_gpus=0 or num_gpus=None (default). To enable this behavior and turn off this error message, set RAY_ACCEL_ENV_VAR_OVERRIDE_ON_ZERO=0
+  warnings.warn(
+Ray initialized.
+[33m(raylet)[0m warning: `VIRTUAL_ENV=/homes/iws/yhruan22/au25-cse599o-hw3/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+[33m(raylet)[0m Using CPython 3.12.9 interpreter at: /usr/bin/python3
+[33m(raylet)[0m Creating virtual environment at: .venv
+[33m(raylet)[0m    Building alignment @ file:///homes/iws/yhruan22/raytmp/session_2025-12-07_05-38-08_314574_2231098/runtime_resources/working_dir_files/_ray_pkg_540a7254c1db7960
+[33m(raylet)[0m    Building cse599o-basics @ file:///homes/iws/yhruan22/raytmp/session_2025-12-07_05-38-08_314574_2231098/runtime_resources/working_dir_files/_ray_pkg_540a7254c1db7960/cse599o-basics
+[33m(raylet)[0m       Built cse599o-basics @ file:///homes/iws/yhruan22/raytmp/session_2025-12-07_05-38-08_314574_2231098/runtime_resources/working_dir_files/_ray_pkg_540a7254c1db7960/cse599o-basics
+[33m(raylet)[0m       Built alignment @ file:///homes/iws/yhruan22/raytmp/session_2025-12-07_05-38-08_314574_2231098/runtime_resources/working_dir_files/_ray_pkg_540a7254c1db7960
+[33m(raylet)[0m Installed 205 packages in 5.18s
+[36m(pid=gcs_server)[0m [2025-12-07 05:38:39,005 E 2231324 2231324] (gcs_server) gcs_server.cc:302: Failed to establish connection to the event+metrics exporter agent. Events and metrics will not be exported. Exporter agent status: RpcError: Running out of retries to initialize the metrics agent. rpc_code: 14
+[33m(raylet)[0m [2025-12-07 05:38:42,481 E 2231542 2231542] (raylet) main.cc:975: Failed to establish connection to the metrics exporter agent. Metrics will not be exported. Exporter agent status: RpcError: Running out of retries to initialize the metrics agent. rpc_code: 14
+[36m(pid=2231826)[0m [2025-12-07 05:38:47,385 E 2231826 2232154] core_worker_process.cc:825: Failed to establish connection to the metrics exporter agent. Metrics will not be exported. Exporter agent status: RpcError: Running out of retries to initialize the metrics agent. rpc_code: 14
+[2025-12-07 05:38:47,635 E 2231098 2231820] core_worker_process.cc:825: Failed to establish connection to the metrics exporter agent. Metrics will not be exported. Exporter agent status: RpcError: Running out of retries to initialize the metrics agent. rpc_code: 14
+[36m(ColocatedWorker pid=2234911)[0m Prompt: Write a story that includes the word grape. One day,  (Keywords: ['grape'])
+[36m(ColocatedWorker pid=2234911)[0m Response #0 (1.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, she asked the giant, "Why is the grape so unhappy?" The giant smiled and said, "I think we should write on the phone. But it won't fit in the garden."
+[36m(ColocatedWorker pid=2234911)[0m The girl said, "That's okay. Let's go to the park."
+[36m(ColocatedWorker pid=2234911)[0m Response #1 (1.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The two friends went to see the grape tree together. As they talked, the grapes and the tree became very serious. They talked about the grape tree and the grapes.
+[36m(ColocatedWorker pid=2234911)[0m The two friends did what they met. They all laughed and smiled. The grapes were so happy and they all had a
+[36m(ColocatedWorker pid=2234911)[0m Response #2 (1.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the woman and the bird went to the store. They bought lots of yummy food! The woman was so happy that the bird had saved her. They became good friends and shared the grape together.
+[36m(ColocatedWorker pid=2234911)[0m <|endoftext|>
+[36m(ColocatedWorker pid=2234911)[0m Response #3 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m Mum said, "Mum, the five of those who love your garden is full of light." 
+[36m(ColocatedWorker pid=2234911)[0m Jane nodded sadly. She said, "I wonder that I will always be here. I promise."
+[36m(ColocatedWorker pid=2234911)[0m Mum smiled and said, "I promise. Sometimes you need to take
+[36m(ColocatedWorker pid=2234911)[0m Norm before grad clipping: 1.8697
+[36m(ColocatedWorker pid=2234911)[0m Loss: 1.7881393432617188e-07
+Step 0: {'step': 1, 'loss': 1.7881393432617188e-07, 'num_trajectories': 1, 'avg_reward': 0.75, 'total_time_ms': 10135.946868045721, 'rollout_time_ms': '9733.653358998708 (96.0%)', 'update_time_ms': '399.84280796488747 (3.9%)', 'transfer_time_ms': '2.4341130047105253 (0.0%)', 'reference_time_ms': '0.0 (0.0%)'}
+[36m(ColocatedWorker pid=2234911)[0m [2025-12-07 05:39:03,133 E 2234911 2235038] core_worker_process.cc:825: Failed to establish connection to the metrics exporter agent. Metrics will not be exported. Exporter agent status: RpcError: Running out of retries to initialize the metrics agent. rpc_code: 14[32m [repeated 39x across cluster] (Ray deduplicates logs by default. Set RAY_DEDUP_LOGS=0 to disable log deduplication, or see https://docs.ray.io/en/master/ray-observability/user-guides/configure-logging.html#log-deduplication for more options.)[0m
+Step 1: {'step': 2, 'loss': 0.0, 'num_trajectories': 1, 'avg_reward': 0.0, 'total_time_ms': 2219.0046749892645, 'rollout_time_ms': '2173.6231980030425 (98.0%)', 'update_time_ms': '43.588322994764894 (2.0%)', 'transfer_time_ms': '1.778476987965405 (0.1%)', 'reference_time_ms': '0.0 (0.0%)'}
+[36m(ColocatedWorker pid=2234911)[0m Prompt: Write a story that includes the word empty. One day,  (Keywords: ['empty'])
+[36m(ColocatedWorker pid=2234911)[0m Response #0 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The cat went to sleep in the tree. The cat saw a message on the ground. The message was from the cat and the cat had to hide. The cat ran to the tree and hid behind it. The cat closed its eyes and started to sleep.
+[36m(ColocatedWorker pid=2234911)[0m The cat woke up and saw
+[36m(ColocatedWorker pid=2234911)[0m Response #1 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the next day, the cat and the bird went to the store. They bought a big, shiny toy. The bird showed the story to its friends. They all liked the story. They were happy the cat was gone. The story was a good day for everyone.
+[36m(ColocatedWorker pid=2234911)[0m 
+[36m(ColocatedWorker pid=2234911)[0m Response #2 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The story has a big fight for the mysterious animal. Fire is not good for the animals. The animals like the story and the animals. They like the story and the animals. They give the things to the animals that cannot hear them too. 
+[36m(ColocatedWorker pid=2234911)[0m The animals worked together to make the story
+[36m(ColocatedWorker pid=2234911)[0m Response #3 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The princess wanted to learn the spell. She asked her mom, "Can you teach me to read the spell?" Her mom said, "I saw the spell, but this word is 'love.'" No spelled. This made you very sad."
+[36m(ColocatedWorker pid=2234911)[0m The princess was scared but she knew the
+[36m(ColocatedWorker pid=2234911)[0m Loss: 0.0
+[36m(ColocatedWorker pid=2234911)[0m Prompt: Write a story that includes the word beware. One day,  (Keywords: ['beware'])
+[36m(ColocatedWorker pid=2234911)[0m Response #0 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the bird came to the park. The bird was very happy. The bird showed the picture to all the animals on the page. The animals laughed and clapped. The bird felt very proud. It knew the word was a toy, and all the animals in the park should
+[36m(ColocatedWorker pid=2234911)[0m Response #1 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the man went to the store on his book. He bought lots of food for the first time. The man was very happy and said, "This is the story!" The man was happy too.
+[36m(ColocatedWorker pid=2234911)[0m The end.
+[36m(ColocatedWorker pid=2234911)[0m <|endoftext|>
+[36m(ColocatedWorker pid=2234911)[0m Response #2 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the bird went to the lecture. The quiet place was to hear the story. The bossy bird got mad and flew away. The wise owl was sad because he knew he should not have taken the quiz.
+[36m(ColocatedWorker pid=2234911)[0m <|endoftext|>
+[36m(ColocatedWorker pid=2234911)[0m Response #3 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the next day, the next day, the cat went to get some medicine. But when the cat tried to eat it, it was not good. The cat was sad.
+[36m(ColocatedWorker pid=2234911)[0m The cat's friend, the dog, saw the cat and asked what was wrong. The dog
+[36m(ColocatedWorker pid=2234911)[0m Loss: 0.0
+Step 2: {'step': 3, 'loss': 0.0, 'num_trajectories': 1, 'avg_reward': 0.0, 'total_time_ms': 1681.8213229998946, 'rollout_time_ms': '1637.9269970348105 (97.4%)', 'update_time_ms': '41.90562601434067 (2.5%)', 'transfer_time_ms': '1.9737999537028372 (0.1%)', 'reference_time_ms': '0.0 (0.0%)'}
+[36m(ColocatedWorker pid=2234911)[0m Prompt: Write a story that includes the word demands. One day,  (Keywords: ['demands'])
+[36m(ColocatedWorker pid=2234911)[0m Response #0 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the bird heard a noise. It was a big, mean cat. The cat wanted to take the bird away. The bird was scared and flew away.
+[36m(ColocatedWorker pid=2234911)[0m The bird was very scared. It did not want to be friends with the cat. The cat did not want to
+[36m(ColocatedWorker pid=2234911)[0m Response #1 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the elephant and the animals took the animals back to jail. They all lived happily ever after. The animals were happy and the elephant was happy too. They all had a fun day in the wild jungle.
+[36m(ColocatedWorker pid=2234911)[0m <|endoftext|>
+[36m(ColocatedWorker pid=2234911)[0m Response #2 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the storm was gone. The storm was so big that it did not open. The storm was so strong that they scattered the exam. The storm was not strong enough for the monkey. The rain was coming, and the lion was scared. The storm passed the rabbit and the
+[36m(ColocatedWorker pid=2234911)[0m Response #3 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the bird and the bird went to see the bird. They talked and laughed. The bird told the bird about the raven's spell. The bird was not happy. The bird was very happy too. They became good friends and played together every day.
+[36m(ColocatedWorker pid=2234911)[0m <|endoftext|>
+Step 3: {'step': 4, 'loss': 0.0, 'num_trajectories': 1, 'avg_reward': 0.0, 'total_time_ms': 633.6900040041655, 'rollout_time_ms': '590.5745479976758 (93.2%)', 'update_time_ms': '41.11503902822733 (6.5%)', 'transfer_time_ms': '1.9873560522682965 (0.3%)', 'reference_time_ms': '0.0 (0.0%)'}
+[36m(ColocatedWorker pid=2234911)[0m Loss: 0.0
+Step 4: {'step': 5, 'loss': 0.0, 'num_trajectories': 1, 'avg_reward': 0.0, 'total_time_ms': 1102.7775619877502, 'rollout_time_ms': '1060.058320988901 (96.1%)', 'update_time_ms': '40.93062999891117 (3.7%)', 'transfer_time_ms': '1.7717930022627115 (0.2%)', 'reference_time_ms': '0.0 (0.0%)'}
+[36m(ColocatedWorker pid=2234911)[0m Prompt: Write a story that includes the word sibling. One day,  (Keywords: ['sibling'])
+[36m(ColocatedWorker pid=2234911)[0m Response #0 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the family went to the park together. They picked out the brave lung and put it on the ground. The purse became very close to the leg and all the birds would sing. The doctor was happy and they both laughed.
+[36m(ColocatedWorker pid=2234911)[0m <|endoftext|>
+[36m(ColocatedWorker pid=2234911)[0m Response #1 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the park ranger went back to the park. The bird saw the novel and began to sing. The bird sang the song again and again. The bird was happy and they became good friends.
+[36m(ColocatedWorker pid=2234911)[0m <|endoftext|>
+[36m(ColocatedWorker pid=2234911)[0m Response #2 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the lawyer was mad at Barky and the lawyer was scared. He gave the lecture to the people. The people were so happy to see him, and they all clapped and laughed together. From that day, the town was more fun than ever.
+[36m(ColocatedWorker pid=2234911)[0m <|endoftext|>
+[36m(ColocatedWorker pid=2234911)[0m Response #3 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the cake was gone. The book was back on the fridge. The judge saw the book and was sorry. The judge was not nice anymore. The man learned that the computer was not nice to take things that were not theirs. The cake was not worth it.
+[36m(ColocatedWorker pid=2234911)[0m <|endoftext|>
+[36m(ColocatedWorker pid=2234911)[0m Loss: 0.0
+[36m(ColocatedWorker pid=2234911)[0m Prompt: Write a story that includes the word dizziness. One day,  (Keywords: ['dizziness'])
+[36m(ColocatedWorker pid=2234911)[0m Response #0 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the dog and the bird shared the poem together. They became good friends and shared the poem together. And they lived happily ever after.
+[36m(ColocatedWorker pid=2234911)[0m <|endoftext|>
+[36m(ColocatedWorker pid=2234911)[0m Response #1 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the lion went to the lecture with the lion. The lion was happy and could finally learn to roar with the lion. The lion, the lion, and the lion became good friends and recorded the lion's story. And they lived happily ever after.
+[36m(ColocatedWorker pid=2234911)[0m <|endoftext|>
+[36m(ColocatedWorker pid=2234911)[0m Response #2 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The bird was tired and could not read anymore. The bird was sad and still hungry. The bird tried to find a way to talk to the judge for the bird. But the bird could not understand the word. The bird cried and cried.
+[36m(ColocatedWorker pid=2234911)[0m A kind, old lady saw the bird and
+[36m(ColocatedWorker pid=2234911)[0m Response #3 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the bird found the word on the phone. But, something unexpected happened. The bird did not tell anyone about the phone. They all laughed and laughed. The bird liked the phone too, and they all became friends.
+[36m(ColocatedWorker pid=2234911)[0m <|endoftext|>
+Step 5: {'step': 6, 'loss': 0.0, 'num_trajectories': 1, 'avg_reward': 0.0, 'total_time_ms': 2059.7521159797907, 'rollout_time_ms': '1891.61916798912 (91.8%)', 'update_time_ms': '166.29837901564315 (8.1%)', 'transfer_time_ms': '1.8207660177722573 (0.1%)', 'reference_time_ms': '0.0 (0.0%)'}
+[36m(ColocatedWorker pid=2234911)[0m Loss: 0.0
+[36m(ColocatedWorker pid=2234911)[0m Prompt: Write a story that includes the word group. One day,  (Keywords: ['group'])
+[36m(ColocatedWorker pid=2234911)[0m Response #0 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the bird came to the big tree. The bird was happy. The bird was happy too. The bird and the bird became good friends. They read many books together. The book was happy too.
+[36m(ColocatedWorker pid=2234911)[0m <|endoftext|>
+[36m(ColocatedWorker pid=2234911)[0m Response #1 (1.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the bird saw a group of friends playing together. They all became friends and behaved well together. The bird and the bird became good friends and had lots of fun. They all learned that it was better to share and be kind than to be selfish.
+[36m(ColocatedWorker pid=2234911)[0m <|endoftext|>
+[36m(ColocatedWorker pid=2234911)[0m Response #2 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the bird learned the spell. The bird was happy and sang a new trick. The bird and the bird became good friends. They played together and had fun. The bird's gifted hero taught the bird a lesson. The bird was happy too.
+[36m(ColocatedWorker pid=2234911)[0m <|endoftext|>
+[36m(ColocatedWorker pid=2234911)[0m Response #3 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the animals started to sing. They all laughed and had fun. The animals liked the pictures. They all had a great day at the big tree.
+[36m(ColocatedWorker pid=2234911)[0m <|endoftext|>
+[36m(ColocatedWorker pid=2234911)[0m Norm before grad clipping: 1.4732
+Step 6: {'step': 7, 'loss': 1.043081283569336e-07, 'num_trajectories': 1, 'avg_reward': 0.25, 'total_time_ms': 1347.8715740493499, 'rollout_time_ms': '1304.2202140204608 (96.8%)', 'update_time_ms': '41.859424964059144 (3.1%)', 'transfer_time_ms': '1.7788800178095698 (0.1%)', 'reference_time_ms': '0.0 (0.0%)'}
+[36m(ColocatedWorker pid=2234911)[0m Loss: 1.043081283569336e-07
+Step 7: {'step': 8, 'loss': 0.0, 'num_trajectories': 1, 'avg_reward': 0.0, 'total_time_ms': 757.574911986012, 'rollout_time_ms': '712.2204619809054 (94.0%)', 'update_time_ms': '43.40879601659253 (5.7%)', 'transfer_time_ms': '1.9311810028739274 (0.3%)', 'reference_time_ms': '0.0 (0.0%)'}
+[36m(ColocatedWorker pid=2234911)[0m Prompt: Write a story that includes the word pepperoni. One day,  (Keywords: ['pepperoni'])
+[36m(ColocatedWorker pid=2234911)[0m Response #0 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, they saw the bird again. This time, it could talk! The bird said, "I live here for a long time. Can we be friends?" The bird and the bird were happy and they all became friends. They all read the story together and had a great day
+[36m(ColocatedWorker pid=2234911)[0m Response #1 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the mosquito saw a boy who was sad. The boy asked, "Why is the turkey so angry?" The bird said, "I'm sad because the pepper was so hungry. But now, the bird was hungry."
+[36m(ColocatedWorker pid=2234911)[0m The bird was happy and ate the pepper. The
+[36m(ColocatedWorker pid=2234911)[0m Response #2 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the pepper and the cat played together. They both were happy and became good friends. The bird was not rude anymore. They all had a great day and went to sleep on the tree together.
+[36m(ColocatedWorker pid=2234911)[0m <|endoftext|>
+[36m(ColocatedWorker pid=2234911)[0m Response #3 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the next day, the bird saw the pepper again. This time, the bird had an idea. The bird flew up high and hit the pepper. The pepper was so happy! The bird saved the pepper and shared the bird. They became good friends and became good friends.
+[36m(ColocatedWorker pid=2234911)[0m Loss: 0.0
+Step 8: {'step': 9, 'loss': 0.0, 'num_trajectories': 1, 'avg_reward': 0.0, 'total_time_ms': 754.5724039664492, 'rollout_time_ms': '708.0603279755451 (93.8%)', 'update_time_ms': '44.51311501907185 (5.9%)', 'transfer_time_ms': '1.9838070147670805 (0.3%)', 'reference_time_ms': '0.0 (0.0%)'}
+[36m(ColocatedWorker pid=2234911)[0m Prompt: Write a story that includes the word becky. One day,  (Keywords: ['becky'])
+[36m(ColocatedWorker pid=2234911)[0m Response #0 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the bird saw a frog inside the bookcase. The bird thought there was some food near the bookcase. The bird and the bunny became friends and ate the book together. They all became good friends and shared the book together.
+[36m(ColocatedWorker pid=2234911)[0m <|endoftext|>
+[36m(ColocatedWorker pid=2234911)[0m Response #1 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the bird and the bird went to see the bird sing. So, the bird and the bird became friends. They all became friends and sang together. The bird's sad song was not the same after all.
+[36m(ColocatedWorker pid=2234911)[0m <|endoftext|>
+[36m(ColocatedWorker pid=2234911)[0m Response #2 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the bird took the bird to a big tree. The bird was scared and could not get down. The bird was very sad and went back to the tree. The bird was still in the tree and the bird never saw the bird again.
+[36m(ColocatedWorker pid=2234911)[0m <|endoftext|>
+[36m(ColocatedWorker pid=2234911)[0m Response #3 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the bite got louder and louder. The bird did not know what to do. The bird tried to talk to the bird, but the bird did not know how. The bird fell down and got a lot of pain. The bird was very sad and could not tell the bird
+[36m(ColocatedWorker pid=2234911)[0m Loss: 0.0
+[36m(ColocatedWorker pid=2234911)[0m Prompt: Write a story that includes the word drew. One day,  (Keywords: ['drew'])
+[36m(ColocatedWorker pid=2234911)[0m Response #0 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the bird and the bird met a bird. The bird asked the bird, "Why are you so mad?" The bird said, "I want to joke, but the bird was hungry." The bird told the bird, "You must be careful. The bird will be careful
+[36m(ColocatedWorker pid=2234911)[0m Response #1 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m At the party, the bird told everyone about the party. The bird and the dog became friends and became good friends. They all learned that it was better to share and be kind than to be selfish. They all became good friends and shared the story together.
+[36m(ColocatedWorker pid=2234911)[0m <|endoftext|>
+[36m(ColocatedWorker pid=2234911)[0m Response #2 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the bird saw a group of friends playing together. They all became friends and behaved well together. The bird and bird became good friends and shared the novel together. They all learned that it was better to share and be kind than to be selfish.
+[36m(ColocatedWorker pid=2234911)[0m <|endoftext|>
+[36m(ColocatedWorker pid=2234911)[0m Response #3 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the bird saw a cat playing with the cat. The bird saw the cat and started to fought the cat with its story. The cat did not want to fight the bird. The bird said, "I'm sorry, I am sorry. Can you forgive me?" The cat
+Step 9: {'step': 10, 'loss': 0.0, 'num_trajectories': 1, 'avg_reward': 0.0, 'total_time_ms': 662.5764140044339, 'rollout_time_ms': '617.1977540361695 (93.2%)', 'update_time_ms': '43.67659304989502 (6.6%)', 'transfer_time_ms': '1.6872810083441436 (0.3%)', 'reference_time_ms': '0.0 (0.0%)'}
+[36m(ColocatedWorker pid=2234911)[0m Loss: 0.0
+[36m(ColocatedWorker pid=2234911)[0m Prompt: Write a story that includes the word thicker. One day,  (Keywords: ['thicker'])
+[36m(ColocatedWorker pid=2234911)[0m Response #0 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The bird found a group of friends playing together. They all became very happy and became friends. The bird and the bird became friends and became good friends. They all learned that it was better to share and be kind than to be selfish and selfish.
+[36m(ColocatedWorker pid=2234911)[0m <|endoftext|>
+[36m(ColocatedWorker pid=2234911)[0m Response #1 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the bird saw a group of friends playing together and being kind. They all became friends and promised to share the bird together. From that day on, they all learned that it was better to share and be kind than to be selfish. They all learned that it was better to
+[36m(ColocatedWorker pid=2234911)[0m Response #2 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the bird took all the people to show them all about the bird. They all became friends and listened to the bird's story together. The bird learned that it should not steal, but it did not help it. From that day on, the bird and the bird became good
+[36m(ColocatedWorker pid=2234911)[0m Response #3 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the bird saw a group of friends playing together. They all became friends and learned that it was better to share and be kind than to be selfish. They all became friends and had lots of fun together. And they all learned that it was better to share and be kind than
+Step 10: {'step': 11, 'loss': 0.0, 'num_trajectories': 1, 'avg_reward': 0.0, 'total_time_ms': 622.130355972331, 'rollout_time_ms': '578.9906849968247 (93.1%)', 'update_time_ms': '41.23896604869515 (6.6%)', 'transfer_time_ms': '1.8873119843192399 (0.3%)', 'reference_time_ms': '0.0 (0.0%)'}
+[36m(ColocatedWorker pid=2234911)[0m Loss: 0.0
+Step 11: {'step': 12, 'loss': 0.0, 'num_trajectories': 1, 'avg_reward': 0.0, 'total_time_ms': 973.019603989087, 'rollout_time_ms': '930.0238430150785 (95.6%)', 'update_time_ms': '41.151000012177974 (4.2%)', 'transfer_time_ms': '1.829547982197255 (0.2%)', 'reference_time_ms': '0.0 (0.0%)'}
+[36m(ColocatedWorker pid=2234911)[0m Prompt: Write a story that includes the word goals. One day,  (Keywords: ['goals'])
+[36m(ColocatedWorker pid=2234911)[0m Response #0 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the fairy saw a group friends playing together and offered to join them. They all became friends and behaved well together. The moral of the story is to be kind and share the story with others than to be selfish and be selfish.
+[36m(ColocatedWorker pid=2234911)[0m <|endoftext|>
+[36m(ColocatedWorker pid=2234911)[0m Response #1 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the bird saw a group of friends playing together again. They all became friends and listened to the bird's story. They all became friends and behaved well together. They became friends and became good friends and behaved well together.
+[36m(ColocatedWorker pid=2234911)[0m <|endoftext|>
+[36m(ColocatedWorker pid=2234911)[0m Response #2 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, they all went to play together without any fight. They all became friends and behaved well together. They all became friends and listened to the story together. They all became friends and learned that it was better to share than to be selfish. And they all became friends and learned that
+[36m(ColocatedWorker pid=2234911)[0m Response #3 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The bird saw a group group friends playing together and they all became friends. They all became friends and behaved well together. They all learned that it was better to share and be kind than to be selfish.
+[36m(ColocatedWorker pid=2234911)[0m <|endoftext|>
+[36m(ColocatedWorker pid=2234911)[0m Loss: 0.0
+[36m(ColocatedWorker pid=2234911)[0m Prompt: Write a story that includes the word foot. One day,  (Keywords: ['foot'])
+[36m(ColocatedWorker pid=2234911)[0m Response #0 (0.0 reward): icky and the bird found a little boy named Timmy and the bird were playing together. They became good friends and behaved well together.
+[36m(ColocatedWorker pid=2234911)[0m <|endoftext|>
+[36m(ColocatedWorker pid=2234911)[0m Response #1 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the bird and the bird saw a group friends playing together in the park. They all became friends and listened to the bird's song together. They all became friends and behaved well together, and the bird became nice and shared the grape. They all became good friends and had fun
+[36m(ColocatedWorker pid=2234911)[0m Response #2 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the bird saw a group friends playing together and decided to join in the game. They all became friends and learned that it was better to share and be kind than to be selfish. They all became friends and became friends and learned that it was better to share and be kind than
+[36m(ColocatedWorker pid=2234911)[0m Response #3 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the bird and the bird saw a group friends and became friends. They all became friends and behaved well together. They all became friends and had lots of fun. The bird and the bird became friends and became good friends and shared the story together. They all learned that it was
+Step 12: {'step': 13, 'loss': 0.0, 'num_trajectories': 1, 'avg_reward': 0.0, 'total_time_ms': 1368.8570510130376, 'rollout_time_ms': '1325.1693950151093 (96.8%)', 'update_time_ms': '41.8748669908382 (3.1%)', 'transfer_time_ms': '1.7993159708566964 (0.1%)', 'reference_time_ms': '0.0 (0.0%)'}
+[36m(ColocatedWorker pid=2234911)[0m Loss: 0.0
+[36m(ColocatedWorker pid=2234911)[0m Prompt: Write a story that includes the word dive. One day,  (Keywords: ['dive'])
+[36m(ColocatedWorker pid=2234911)[0m Response #0 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the bird heard a group of friends playing together. They all became friends and behaved well together in the park. They all became good friends and behaved well together than ever before. They all became good friends and became the best of friends. The bird was not so sad anymore,
+[36m(ColocatedWorker pid=2234911)[0m Response #1 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the bird saw a group friends playing together again. They all became friends and behaved well together. They all learned that it was better to share and be kind than to be selfish. And they all became friends and learned that it was better to share and be kind than to be
+[36m(ColocatedWorker pid=2234911)[0m Response #2 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the frog and the bird found a frog and asked the bird to give the bird a better try. The bird said yes and gave the bird a hug. They became friends and behaved well together. The bird and the bird became best friends and had lots of fun together.
+[36m(ColocatedWorker pid=2234911)[0m 
+[36m(ColocatedWorker pid=2234911)[0m Response #3 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the bird saw a group of friends playing together and joined in and joined the game together. The bird and the bird became friends and behaved well together, knowing that they did the right thing to do. They all became friends and behaved well together in the park, all because they
+Step 13: {'step': 14, 'loss': 0.0, 'num_trajectories': 1, 'avg_reward': 0.0, 'total_time_ms': 640.1251779752783, 'rollout_time_ms': '596.0657839896157 (93.1%)', 'update_time_ms': '42.06331796012819 (6.6%)', 'transfer_time_ms': '1.9732589717023075 (0.3%)', 'reference_time_ms': '0.0 (0.0%)'}
+[36m(ColocatedWorker pid=2234911)[0m Loss: 0.0
+[36m(ColocatedWorker pid=2234911)[0m Prompt: Write a story that includes the word catnip. One day,  (Keywords: ['catnip'])
+[36m(ColocatedWorker pid=2234911)[0m Response #0 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the cat and the dog were so surprised! They became friends and had lots of fun together. The cat and the dog became good friends and had lots of fun, and they all learned that it was better to share than to be selfish. They all became friends and behaved well
+[36m(ColocatedWorker pid=2234911)[0m Response #1 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The moral of the story is that it should listen to others and not to be selfish. It should never be selfish or steal.
+[36m(ColocatedWorker pid=2234911)[0m <|endoftext|>
+[36m(ColocatedWorker pid=2234911)[0m Response #2 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the bird saw a group friends playing together near a tree. They all became friends and behaved well together. They all became friends and behaved well together. They all learned that it was better to share and be kind than to be selfish.
+[36m(ColocatedWorker pid=2234911)[0m <|endoftext|>
+[36m(ColocatedWorker pid=2234911)[0m Response #3 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the cat and the bird all became friends and behaved well together. They all became friends and became good friends and behaved well together. They all became good friends and learned that it was better to be kind than to be selfish.
+[36m(ColocatedWorker pid=2234911)[0m <|endoftext|>
+Step 14: {'step': 15, 'loss': 0.0, 'num_trajectories': 1, 'avg_reward': 0.0, 'total_time_ms': 874.1016029962339, 'rollout_time_ms': '702.3186459555291 (80.3%)', 'update_time_ms': '169.83015998266637 (19.4%)', 'transfer_time_ms': '1.935197040438652 (0.2%)', 'reference_time_ms': '0.0 (0.0%)'}
+[36m(ColocatedWorker pid=2234911)[0m Loss: 0.0
+Step 15: {'step': 16, 'loss': 0.0, 'num_trajectories': 1, 'avg_reward': 0.0, 'total_time_ms': 625.4185709985904, 'rollout_time_ms': '581.4993279636838 (93.0%)', 'update_time_ms': '42.07156598567963 (6.7%)', 'transfer_time_ms': '1.834336027968675 (0.3%)', 'reference_time_ms': '0.0 (0.0%)'}
+[36m(ColocatedWorker pid=2234911)[0m Prompt: Write a story that includes the word nation. One day,  (Keywords: ['nation'])
+[36m(ColocatedWorker pid=2234911)[0m Response #0 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the bird saw a group group friends playing together and feeling jealous to join in the game. They all became friends and became friends and listened to the bird's music together, all and the bird became friends and behaved well together and became happier and better friends than ever! They all
+[36m(ColocatedWorker pid=2234911)[0m Response #1 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the bird saw a group group friends playing together in the forest again. They all became friends and behaved well together and became friends with their new friends who had learned that it was better to share in peace than to be selfish. They all became friends and behaved well together, and
+[36m(ColocatedWorker pid=2234911)[0m Response #2 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the bird saw a group group friends playing together! The bird and the bird became friends and became friends and behaved well together. They all became friends and behaved well together in the oak tree and shared the story and became friends with all the bird and the bird.
+[36m(ColocatedWorker pid=2234911)[0m <|endoftext|>
+[36m(ColocatedWorker pid=2234911)[0m Response #3 (0.0 reward): 
+[36m(ColocatedWorker pid=2234911)[0m The next day, the bird saw a group friends playing together again and helped build a new group friends join in. They all became friends and behaved well together, and they all became friends and behaved well together. They all became friends and became good friends and behaved well together and became good friends forever
+[36m(ColocatedWorker pid=2234911)[0m Loss: 0.0
+Final training statistics: {'step_count': 16, 'model_parameters': 0, 'time_stats': {'rollout': 25143.22202996118, 'update': 1285.3686110465787, 'transfer': 30.40642203995958, 'reference': 0.0, 'total': 26459.24021495739}, 'time_stats_pct': {'rollout': 95.02624348127628, 'update': 4.857919579716279, 'transfer': 0.114917971162191, 'reference': 0.0, 'total': 100.0}}
+Training completed.
+Ray shutdown.

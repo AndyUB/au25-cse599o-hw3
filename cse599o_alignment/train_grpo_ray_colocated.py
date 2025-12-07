@@ -849,7 +849,7 @@ def run_training(
 
     set_seed()
     prompts_per_rollout_batch = prompts_per_batch * steps_per_rollout
-    num_warmup_steps = steps_per_rollout
+    num_warmup_steps = steps_per_rollout * 2
     for step in range(0, num_warmup_steps + num_steps, steps_per_rollout):
         # Sample keywords (single keyword per prompt)
         if not profile:

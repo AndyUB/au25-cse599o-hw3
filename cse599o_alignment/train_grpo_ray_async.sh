@@ -18,6 +18,7 @@ for k in "${ks[@]}"; do
         --steps_per_rollout $k \
         --prompts_per_batch 8 \
         --ckpt_interval 100 \
+        --profile \
         --verbose > $LOG_DIR/$timestamp-k$k.log 2>&1
         # --monitor_kl \
 done

@@ -220,6 +220,9 @@ def batch_generate_responses(
     for _ in range(max_tokens):
         # input_ids: (prev num_valid, prev seq_len -> seq_len)
         if input_ids.shape[1] > context_length:
+            if profile:
+                raise RuntimeError("Input exceeds context length during profiling")
+
             discard_inp_result = discard_long_inputs(
                 input_ids, context_length, next_token_positions, rollout_ids
             )
@@ -254,6 +257,9 @@ def batch_generate_responses(
         pad_column = torch.zeros((num_valid, 1), dtype=torch.long, device=device)
         input_ids = torch.cat([input_ids, pad_column], dim=1)  # (num_valid, seq_len+1)
         input_ids[batch_dim_idx, next_token_positions] = next_token_ids
+
+        if profile:
+            continue
 
         discard_oup_result = discard_eot_outputs(
             input_ids, tokenizer.eot_token, next_token_positions, rollout_ids

@@ -168,6 +168,7 @@ def batch_generate_responses(
     context_length: int,
     device: torch.device,
     with_probs: bool = True,
+    profile: bool = False,
 ) -> tuple[list[list[int]], list[list[float]] | None]:
     """
     Generate a batch of responses from the model given a list of prompts.
@@ -182,6 +183,7 @@ def batch_generate_responses(
         context_length (int): Maximum context length for the model.
         device (torch.device): Device for computation.
         with_probs (bool): Whether to return log probabilities.
+        profile (bool): Whether to enable profiling.
 
     Returns:
         tuple[list[list[int]], list[list[float]] | None]: Generated response tokens,

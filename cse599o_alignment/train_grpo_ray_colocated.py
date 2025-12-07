@@ -191,7 +191,10 @@ class Generator:
 
     @torch.no_grad()
     def generate_trajectories(
-        self, prompts: list[str], verbose: bool = False
+        self,
+        prompts: list[str],
+        verbose: bool = False,
+        profile: bool = False,
     ) -> list[Trajectory]:
         """
         Generate G responses for each prompt using TransformerLM.
@@ -212,6 +215,7 @@ class Generator:
             temperature=SAMPLING_TEMPERATURE,
             context_length=CONTEXT_LENGTH,
             device=self.generator_device,
+            profile=profile,
         )
 
         for prompt_id in range(len(prompts)):
@@ -408,6 +412,7 @@ class Learner:
         ref_log_probs: torch.Tensor | None = None,
         val_prompts: list[str] | None = None,
         verbose: bool = False,
+        profile: bool = False,
     ) -> float:
         """
         Perform one policy update step.
@@ -420,6 +425,7 @@ class Learner:
                 Required if monitor_kl is True. Shape (num_trajectories, G, sequence_length).
             val_prompts (list[str] | None): Validation prompts. Required if monitor_kl is True.
             verbose (bool): Whether to enable verbose logging.
+            profile (bool): Whether to enable profiling.
 
         Returns:
             float: Loss value after the update step.
@@ -610,7 +616,12 @@ class ColocatedWorker(Generator, Learner, ReferenceModel):
         set_seed()
 
     def training_step(
-        self, prompts: list[str], monitor_kl: bool = False, verbose: bool = False
+        self,
+        prompts: list[str],
+        monitor_kl: bool = False,
+        warmup: bool = False,
+        verbose: bool = False,
+        profile: bool = False,
     ) -> dict[str, Any]:
         """Perform one complete training step: generate rollout + update policy."""
 
@@ -625,7 +636,9 @@ class ColocatedWorker(Generator, Learner, ReferenceModel):
         # Generate trajectories for the batch of prompts
         self.sync_generator()
         rollout_start = time.perf_counter()
-        trajectories = self.generate_trajectories(prompts, verbose=verbose)
+        trajectories = self.generate_trajectories(
+            prompts, verbose=verbose, profile=profile
+        )
         self.sync_generator()
         rollout_end = time.perf_counter()
 
@@ -659,6 +672,7 @@ class ColocatedWorker(Generator, Learner, ReferenceModel):
                 ref_log_probs=sub_ref_probs,
                 val_prompts=self.prompts_val,
                 verbose=verbose,
+                profile=profile,
             )
             final_loss = loss
         self.sync_learner()
@@ -671,8 +685,6 @@ class ColocatedWorker(Generator, Learner, ReferenceModel):
         self.sync_generator()
         transfer_end = time.perf_counter()
 
-        self.step_count += self.steps_per_rollout
-
         total_time_ms = (transfer_end - rollout_start) * 1000
         rollout_time_ms = (rollout_end - rollout_start) * 1000
         update_time_ms = (update_end - update_start) * 1000
@@ -681,11 +693,13 @@ class ColocatedWorker(Generator, Learner, ReferenceModel):
         update_pct = update_time_ms / total_time_ms * 100
         transfer_pct = transfer_time_ms / total_time_ms * 100
         ref_pct = ref_time / total_time_ms * 100
-        self.time_stats["total"] += total_time_ms
-        self.time_stats["rollout"] += rollout_time_ms
-        self.time_stats["update"] += update_time_ms
-        self.time_stats["transfer"] += transfer_time_ms
-        self.time_stats["reference"] += ref_time
+        if not warmup:
+            self.step_count += self.steps_per_rollout
+            self.time_stats["total"] += total_time_ms
+            self.time_stats["rollout"] += rollout_time_ms
+            self.time_stats["update"] += update_time_ms
+            self.time_stats["transfer"] += transfer_time_ms
+            self.time_stats["reference"] += ref_time
 
         return {
             "step": self.step_count,
@@ -758,6 +772,7 @@ def run_training(
     ckpt_interval: int = 5,
     monitor_kl: bool = False,
     verbose: bool = False,
+    profile: bool = False,
 ) -> None:
     """
     Run colocated GRPO training with text generation.
@@ -773,6 +788,7 @@ def run_training(
         steps_per_rollout (int): Number of training steps per rollout.
         monitor_kl (bool): Whether to monitor KL divergence.
         verbose (bool): Whether to enable verbose logging.
+        profile (bool): Whether to enable profiling.
     """
     if num_workers != 1:
         raise ValueError("Only supports a single colocated worker")
@@ -833,19 +849,25 @@ def run_training(
 
     set_seed()
     prompts_per_rollout_batch = prompts_per_batch * steps_per_rollout
-    for step in range(0, num_steps, steps_per_rollout):
+    num_warmup_steps = steps_per_rollout
+    for step in range(0, num_warmup_steps + num_steps, steps_per_rollout):
         # Sample keywords (single keyword per prompt)
         kws_batch = np.random.choice(
             keywords_train, size=prompts_per_rollout_batch, replace=False
         )
         prompts_train = [make_keyword_inclusion_prompt([kw]) for kw in kws_batch]
         # Perform training step
+        warmup = step < num_warmup_steps
         step_stats = ray.get(
             worker.training_step.remote(
-                prompts_train, monitor_kl=monitor_kl, verbose=verbose
+                prompts_train,
+                monitor_kl=monitor_kl,
+                warmup=warmup,
+                verbose=verbose,
+                profile=profile,
             )
         )
-        print(f"Step {step}: {step_stats}")
+        print(f"Step {step} (warmup={warmup}): {step_stats}")
         should_save = any(
             (step + substep) % ckpt_interval == 0
             for substep in range(1, steps_per_rollout + 1)
@@ -871,6 +893,7 @@ def run_once(
     ckpt_interval: int = 5,
     monitor_kl: bool = False,
     verbose: bool = False,
+    profile: bool = False,
 ) -> None:
     """Entry point for training."""
     run_training(
@@ -886,6 +909,7 @@ def run_once(
         ckpt_interval=ckpt_interval,
         monitor_kl=monitor_kl,
         verbose=verbose,
+        profile=profile,
     )
 
 
@@ -933,6 +957,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--monitor_kl", action="store_true", help="Monitor KL divergence"
     )
+    parser.add_argument("--profile", action="store_true", help="Profiling flag")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
     args = parser.parse_args()
 
@@ -978,6 +1003,7 @@ if __name__ == "__main__":
             ckpt_interval=args.ckpt_interval,
             monitor_kl=args.monitor_kl,
             verbose=args.verbose,
+            profile=args.profile,
         )
         log("Training completed.")
     finally:

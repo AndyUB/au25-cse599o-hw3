@@ -39,7 +39,7 @@ def extract_keywords_from_prompt(prompt: str) -> list[str]:
     if not prompt.startswith(KEYWORD_INCLUSION_PROMPT_PREFIX) or not prompt.endswith(
         KEYWORD_INCLUSION_PROMPT_SUFFIX
     ):
-        raise ValueError("Prompt format is incorrect")
+        raise ValueError(f"Prompt format is incorrect: {prompt}")
 
     kw_str = prompt[
         len(KEYWORD_INCLUSION_PROMPT_PREFIX) : -len(KEYWORD_INCLUSION_PROMPT_SUFFIX)

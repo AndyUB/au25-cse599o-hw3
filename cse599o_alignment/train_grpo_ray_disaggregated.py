@@ -68,7 +68,7 @@ def train_disaggregated(
         prompts.append(prompts_batch)
 
     trajs_ref: list[Trajectory] = generator.generate_trajectories.remote(
-        prompts_batch[0], verbose=verbose, profile=profile
+        prompts[0], verbose=verbose, profile=profile
     )
     transfer_ref = None
     for step in range(num_steps - 1):
@@ -86,7 +86,7 @@ def train_disaggregated(
         )
         # Sync weights
         # Wait for update to complete
-        weights_ref = learner.get_weights.remote(loss_ref)
+        weights_ref = learner.get_weights.remote(loss_ref=loss_ref)
         transfer_ref = generator.set_weights.remote(weights_ref)
     # Final step
     loss_ref = learner.update_policy.remote(trajs_ref, verbose=verbose, profile=profile)

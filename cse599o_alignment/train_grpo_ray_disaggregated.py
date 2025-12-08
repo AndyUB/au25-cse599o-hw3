@@ -8,6 +8,7 @@ Students should complete the TODO parts to:
 """
 
 import argparse
+import time
 import ray
 import numpy as np
 
@@ -53,7 +54,7 @@ def train_disaggregated(
     verbose: bool = False,
 ) -> float:
     if num_steps < 1:
-        raise ValueError("num_steps must be positive")
+        return 0.0
 
     prompts: list[list[str]] = []
     for _ in range(num_steps):
@@ -149,12 +150,17 @@ def run_training(
         num_steps=num_warmup_steps,
         **train_args,
     )
+    start_time = time.perf_counter()
     loss = train_disaggregated(
         num_steps=num_steps,
         **train_args,
     )
-    print(f"Warmup loss: {warmup_loss}, Final loss: {loss}")
-
+    end_time = time.perf_counter()
+    elapse = end_time - start_time
+    print(
+        f"Warmup loss: {warmup_loss}, Final loss: {loss}, "
+        f"Training time: {elapse:.2f} seconds"
+    )
     # Get final statistics
     ray.get(learner.export_learner_stats.remote(result_dir))
 

@@ -9,8 +9,9 @@ Students should complete the TODO parts to:
 
 import argparse
 import time
-import ray
 import numpy as np
+import ray
+from ray.experimental.collective import create_collective_group
 
 from cse599o_alignment.train_util import make_keyword_inclusion_prompt, set_seed
 from cse599o_alignment.train_grpo_ray_colocated import (
@@ -40,16 +41,21 @@ class LearnerWorker(Learner):
     def __init__(self, ckpt_file: str):
         super().__init__(ckpt_file=ckpt_file)
 
+    @ray.method(tensor_transport="nccl")
+    def get_weights_rdt(self, **kwargs):
+        return self.get_weights(**kwargs)
+
 
 # ===================== Training loop =====================
 
 
 def train_disaggregated(
-    generator: Generator,
-    learner: Learner,
+    generator: "ray.actor.ActorHandle",
+    learner: "ray.actor.ActorHandle",
     num_steps: int,
     keywords: list[str],
     prompts_per_batch: int,
+    rdt: bool = False,
     profile: bool = False,
     verbose: bool = False,
 ) -> float:
@@ -86,7 +92,10 @@ def train_disaggregated(
         )
         # Sync weights
         # Wait for update to complete
-        weights_ref = learner.get_weights.remote(loss_ref=loss_ref)
+        if rdt:
+            weights_ref = learner.get_weights_rdt.remote(loss_ref=loss_ref)
+        else:
+            weights_ref = learner.get_weights.remote(loss_ref=loss_ref)
         transfer_ref = generator.set_weights.remote(weights_ref)
     # Final step
     loss_ref = learner.update_policy.remote(trajs_ref, verbose=verbose, profile=profile)
@@ -103,6 +112,7 @@ def run_training(
     num_workers: int = 2,
     prompts_per_batch: int = 32,
     num_val_prompts: int = 32,
+    rdt: bool = False,
     verbose: bool = False,
     profile: bool = False,
 ) -> None:
@@ -111,12 +121,14 @@ def run_training(
 
     Args:
         keywords_file (str): Path to keywords file.
+        train_val_kw_dir (str): Directory for train/val keyword split.
         ckpt_file (str): Path to model checkpoint.
         result_dir (str): Directory to save results.
         num_steps (int): Number of training steps to perform.
         num_workers (int): Number of colocated workers to use.
         prompts_per_batch (int): Number of prompts per training batch.
         num_val_prompts (int): Number of validation prompts.
+        rdt (bool): Whether to use Ray Direct Transport (RDT).
         verbose (bool): Whether to enable verbose logging.
         profile (bool): Whether to enable profiling.
     """
@@ -133,8 +145,10 @@ def run_training(
     )
 
     # Create workers
-    generator: Generator = GeneratorWorker.remote(ckpt_file=ckpt_file)
-    learner: Learner = LearnerWorker.remote(ckpt_file=ckpt_file)
+    generator = GeneratorWorker.remote(ckpt_file=ckpt_file)
+    learner = LearnerWorker.remote(ckpt_file=ckpt_file)
+    if rdt:
+        create_collective_group([generator, learner], backend="nccl")
 
     set_seed()
     num_warmup_steps = 2 if profile else 0
@@ -143,6 +157,7 @@ def run_training(
         learner=learner,
         keywords=keywords_train,
         prompts_per_batch=prompts_per_batch,
+        rdt=rdt,
         profile=profile,
         verbose=verbose,
     )
@@ -174,6 +189,7 @@ def run_once(
     num_workers: int = 2,
     prompts_per_batch: int = 32,
     num_val_prompts: int = 32,
+    rdt: bool = False,
     verbose: bool = False,
     profile: bool = False,
 ) -> None:
@@ -187,6 +203,7 @@ def run_once(
         num_workers=num_workers,
         prompts_per_batch=prompts_per_batch,
         num_val_prompts=num_val_prompts,
+        rdt=rdt,
         verbose=verbose,
         profile=profile,
     )
@@ -223,6 +240,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--num_val_prompts", type=int, default=32, help="Number of validation prompts"
+    )
+    parser.add_argument(
+        "--rdt", action="store_true", help="Use Ray Direct Transport (RDT)"
     )
     parser.add_argument("--profile", action="store_true", help="Profiling flag")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
@@ -266,6 +286,7 @@ if __name__ == "__main__":
             num_workers=args.workers,
             prompts_per_batch=args.prompts_per_batch,
             num_val_prompts=args.num_val_prompts,
+            rdt=args.rdt,
             verbose=args.verbose,
             profile=args.profile,
         )

@@ -195,6 +195,7 @@ class Generator:
         prompts: list[str],
         verbose: bool = False,
         profile: bool = False,
+        **kwargs,
     ) -> list[Trajectory]:
         """
         Generate G responses for each prompt using TransformerLM.
@@ -497,7 +498,7 @@ class Learner:
         self.learner_stats["avg_train_rewards"].append(avg_reward)
         return loss
 
-    def get_weights(self) -> dict[str, Any]:
+    def get_weights(self, **kwargs) -> dict[str, Any]:
         """
         Get current learner model weights.
 
@@ -759,6 +760,56 @@ class ColocatedWorker(Generator, Learner, ReferenceModel):
 # ===================== Training loop =====================
 
 
+def split_keywords(
+    train_val_kw_dir: str,
+    keywords_file: str,
+    prompts_per_rollout_batch: int,
+    num_val_prompts: int,
+) -> tuple[list[str], list[str]]:
+    # Define training prompts
+    train_kw_filename = "train_keywords.txt"
+    val_kw_filename = "val_keywords.txt"
+    train_kw_path = os.path.join(train_val_kw_dir, train_kw_filename)
+    val_kw_path = os.path.join(train_val_kw_dir, val_kw_filename)
+    if any(not os.path.exists(p) for p in [train_kw_path, val_kw_path]):
+        os.makedirs(train_val_kw_dir, exist_ok=True)
+        with open(keywords_file, "r") as f:
+            keywords = [line.strip() for line in f.readlines() if line.strip()]
+        # num_val_prompts keywords are used for validation
+        if num_val_prompts + prompts_per_rollout_batch > len(keywords):
+            raise ValueError("Not enough keywords for training and validation")
+
+        # randomly select validation keywords, set seed for reproducibility
+        np.random.seed(599)
+        val_indices = np.random.choice(
+            len(keywords), size=num_val_prompts, replace=False
+        )
+        keywords_val = [keywords[i] for i in val_indices]
+        keywords_train = [
+            keywords[i] for i in range(len(keywords)) if i not in val_indices
+        ]
+
+        # Save train/val split
+        with open(train_kw_path, "w") as f:
+            for kw in keywords_train:
+                f.write(f"{kw}\n")
+        with open(val_kw_path, "w") as f:
+            for kw in keywords_val:
+                f.write(f"{kw}\n")
+    else:
+        with open(train_kw_path, "r") as f:
+            keywords_train = [line.strip() for line in f.readlines() if line.strip()]
+        with open(val_kw_path, "r") as f:
+            keywords_val = [line.strip() for line in f.readlines() if line.strip()]
+
+        if len(keywords_train) < prompts_per_rollout_batch:
+            raise ValueError("Not enough training keywords in the provided split")
+        if len(keywords_val) < num_val_prompts:
+            raise ValueError("Not enough validation keywords in the provided split")
+
+    return keywords_train, keywords_val
+
+
 def run_training(
     keywords_file: str,
     train_val_kw_dir: str,
@@ -797,47 +848,13 @@ def run_training(
     if num_steps % steps_per_rollout != 0:
         raise ValueError("num_steps must be divisible by steps_per_rollout")
 
-    # Define training prompts
-    train_kw_filename = "train_keywords.txt"
-    val_kw_filename = "val_keywords.txt"
-    train_kw_path = os.path.join(train_val_kw_dir, train_kw_filename)
-    val_kw_path = os.path.join(train_val_kw_dir, val_kw_filename)
-    if any(not os.path.exists(p) for p in [train_kw_path, val_kw_path]):
-        os.makedirs(train_val_kw_dir, exist_ok=True)
-        with open(keywords_file, "r") as f:
-            keywords = [line.strip() for line in f.readlines() if line.strip()]
-        # num_val_prompts keywords are used for validation
-        if num_val_prompts + prompts_per_batch > len(keywords):
-            raise ValueError("Not enough keywords for training and validation")
-
-        # randomly select validation keywords, set seed for reproducibility
-        np.random.seed(599)
-        val_indices = np.random.choice(
-            len(keywords), size=num_val_prompts, replace=False
-        )
-        keywords_val = [keywords[i] for i in val_indices]
-        keywords_train = [
-            keywords[i] for i in range(len(keywords)) if i not in val_indices
-        ]
-
-        # Save train/val split
-        with open(train_kw_path, "w") as f:
-            for kw in keywords_train:
-                f.write(f"{kw}\n")
-        with open(val_kw_path, "w") as f:
-            for kw in keywords_val:
-                f.write(f"{kw}\n")
-    else:
-        with open(train_kw_path, "r") as f:
-            keywords_train = [line.strip() for line in f.readlines() if line.strip()]
-        with open(val_kw_path, "r") as f:
-            keywords_val = [line.strip() for line in f.readlines() if line.strip()]
-
-        if len(keywords_train) < prompts_per_batch:
-            raise ValueError("Not enough training keywords in the provided split")
-        if len(keywords_val) < num_val_prompts:
-            raise ValueError("Not enough validation keywords in the provided split")
-
+    prompts_per_rollout_batch = prompts_per_batch * steps_per_rollout
+    keywords_train, keywords_val = split_keywords(
+        train_val_kw_dir,
+        keywords_file,
+        prompts_per_rollout_batch,
+        num_val_prompts,
+    )
     prompts_val = [make_keyword_inclusion_prompt([kw]) for kw in keywords_val]
 
     # Create workers
@@ -848,8 +865,7 @@ def run_training(
     )
 
     set_seed()
-    prompts_per_rollout_batch = prompts_per_batch * steps_per_rollout
-    num_warmup_steps = steps_per_rollout * 2
+    num_warmup_steps = steps_per_rollout * 2 if profile else 0
     for step in range(0, num_warmup_steps + num_steps, steps_per_rollout):
         # Sample keywords (single keyword per prompt)
         if not profile:

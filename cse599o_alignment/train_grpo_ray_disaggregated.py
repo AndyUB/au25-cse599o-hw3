@@ -2,225 +2,268 @@
 GRPO Skeleton: Minimal Asynchronous Training Loop
 ------------------------------------------------
 Students should complete the TODO parts to:
- - implement rollout generation with text generation using TransformerLM (Generator)
- - compute rewards for text responses (Scorer)
+ - implement rollout generation with reward computation using TransformerLM (Generator)
  - perform policy updates using GRPO algorithm (Learner)
  - synchronize model weights between Generator and Learner
 """
 
-import asyncio
 import argparse
 import ray
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.distributions import Categorical
-import tiktoken
-import time
-from typing import List, Dict, Any, Optional
 import numpy as np
 
-from cse599o_basics.model import TransformerLM
-from cse599o_basics.optimizer import AdamW
-from cse599o_alignment.grpo import (
-    compute_group_normalized_reward,
-    grpo_microbatch_train_step,
-    gradient_clipping
+from cse599o_alignment.train_util import make_keyword_inclusion_prompt, set_seed
+from cse599o_alignment.train_grpo_ray_colocated import (
+    N_GRPO_STEPS,
+    Trajectory,
+    Generator,
+    Learner,
+    split_keywords,
 )
-
-
-# ===================== Basic setup =====================
-
-G = 4  # group size (number of responses per prompt)
-VOCAB_SIZE = tiktoken.get_encoding("gpt2").n_vocab
-CONTEXT_LENGTH = 256
-NUM_LAYERS = 4
-D_MODEL = 512
-NUM_HEADS = 16
-D_FF = 1344
-THETA = 10000
-CHECKPOINT_PATH = ""
-
-
-def get_device():
-    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
-# ===================== Data container =====================
-
-class Trajectory:
-    """Stores a single rollout trajectory for text generation"""
-    def __init__(
-        self,
-        version: int,
-        prompts: List[str],  # shape: [G]
-        responses: List[str],  # shape: [G]
-        rewards: torch.Tensor,  # shape: [G]
-        log_probs: torch.Tensor,  # shape: [G]
-        values: Optional[torch.Tensor] = None,  # shape: [G]
-    ):
-        self.version = version
-        self.prompts = prompts
-        self.responses = responses
-        self.rewards = rewards
-        self.log_probs = log_probs
-        self.values = values
 
 
 # ===================== Actors =====================
 
-@ray.remote
-class TrajectoryQueue:
-    """Buffer between Generator and Scorer."""
-    def __init__(self):
-        self.q = asyncio.Queue()
 
-    def put(self, traj: Trajectory):
-        # TODO: implement trajectory queuing
-        pass
+@ray.remote(num_gpus=1)
+class GeneratorWorker(Generator):
+    """Generator Ray actor."""
 
-    def get(self):
-        # TODO: implement trajectory retrieval with timeout
-        return None
+    def __init__(self, ckpt_file: str):
+        super().__init__(ckpt_file=ckpt_file)
 
 
-@ray.remote
-class ReplayBuffer:
-    """Stores scored trajectories for the Learner."""
-    def __init__(self):
-        self.data = []
+@ray.remote(num_gpus=1)
+class LearnerWorker(Learner):
+    """Learner Ray actor."""
 
-    def put(self, traj: Trajectory):
-        # TODO: store completed trajectories here
-        pass
-
-    def sample(self, k: int):
-        # TODO: sample k trajectories for training
-        return []
-
-
-@ray.remote
-class Scorer:
-    """Assigns rewards to generated text responses."""
-    def __init__(self, traj_q, replay_buf):
-        self.traj_q = traj_q
-        self.replay_buf = replay_buf
-        self.running = False
-
-    def run(self):
-        """Continuously fetch trajectories, assign rewards, and store them."""
-        self.running = True
-        while self.running:
-            # TODO: Get trajectories from queue, compute rewards, store in replay buffer
-            # This should implement a reward function that evaluates text quality
-            # e.g., keyword inclusion, safety, helpfulness, etc.
-            pass
-
-    def stop(self):
-        self.running = False
-
-
-@ray.remote
-class Learner:
-    """Learns policy updates from the replay buffer using TransformerLM."""
-    def __init__(self, replay_buf):
-        self.device = get_device()
-        # TODO: Initialize the TransformerLM model
-        # self.model = TransformerLM(
-        #     vocab_size=VOCAB_SIZE,
-        #     context_length=CONTEXT_LENGTH,
-        #     num_layers=NUM_LAYERS,
-        #     d_model=D_MODEL,
-        #     num_heads=NUM_HEADS,
-        #     d_ff=D_FF,
-        #     theta=THETA
-        # ).to(self.device)
-        # self.model.load_checkpoint(CHECKPOINT_PATH)
-        # self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=1e-5)
-        self.version = 0
-        self.replay_buf = replay_buf
-
-    def step(self):
-        """One GRPO/PPO-style update step."""
-        # TODO: sample from replay buffer, compute advantages, update model
-        # This should implement GRPO policy gradient updates for text generation
-        loss = torch.tensor(0.0, device=self.device)
-        self.version += 1
-        return float(loss.item())
-
-    def get_weights(self):
-        # TODO: Return model weights for synchronization with Generator
-        return {}  # {k: v.cpu() for k, v in self.model.state_dict().items()}
-
-    def get_version(self):
-        return self.version
-
-
-@ray.remote
-class Generator:
-    """Generates text responses using TransformerLM policy."""
-    def __init__(self, traj_q):
-        self.device = get_device()
-        # TODO: Initialize the TransformerLM model
-        # self.model = TransformerLM(
-        #     vocab_size=VOCAB_SIZE,
-        #     context_length=CONTEXT_LENGTH,
-        #     num_layers=NUM_LAYERS,
-        #     d_model=D_MODEL,
-        #     num_heads=NUM_HEADS,
-        #     d_ff=D_FF,
-        #     theta=THETA
-        # ).to(self.device)
-        # self.model.load_checkpoint(CHECKPOINT_PATH)
-        # self.tokenizer = tiktoken.get_encoding("gpt2")
-        self.traj_q = traj_q
-        self.version = 0
-
-    def generate(self, prompts: List[str]):
-        """Generate text responses and send to Scorer."""
-        # TODO: Generate G responses for each prompt using TransformerLM
-        # - Tokenize prompts
-        # - Generate text responses using self.model
-        # - Calculate log probabilities for generated tokens
-        # - Create Trajectory objects and send to trajectory queue
-        pass
-
-    def update(self, weights: Dict, version: int):
-        """Load updated learner weights."""
-        # TODO: Update model weights from learner
-        # sd = self.model.state_dict()
-        # for n, w in weights.items():
-        #     sd[n] = w.to(self.device)
-        # self.model.load_state_dict(sd)
-        self.version = version
+    def __init__(self, ckpt_file: str):
+        super().__init__(ckpt_file=ckpt_file)
 
 
 # ===================== Training loop =====================
 
-def run_training(num_steps: int = 3):
-    """Run disaggregated GRPO training with text generation."""
-    traj_q = TrajectoryQueue.remote()
-    replay_buf = ReplayBuffer.remote()
-    learner = Learner.remote(replay_buf)
-    scorer = Scorer.remote(traj_q, replay_buf)
-    generator = Generator.remote(traj_q)
 
-    # TODO: Driver code for the training loop
-    pass
+def train_disaggregated(
+    generator: Generator,
+    learner: Learner,
+    num_steps: int,
+    keywords: list[str],
+    prompts_per_batch: int,
+    profile: bool = False,
+    verbose: bool = False,
+) -> float:
+    if num_steps < 1:
+        raise ValueError("num_steps must be positive")
+
+    prompts: list[list[str]] = []
+    for _ in range(num_steps):
+        if not profile:
+            kws_batch = np.random.choice(
+                keywords, size=prompts_per_batch, replace=False
+            )
+        else:
+            kws_batch = [keywords[0]] * prompts_per_batch
+        prompts_batch = [make_keyword_inclusion_prompt([kw]) for kw in kws_batch]
+        prompts.append(prompts_batch)
+
+    trajs_ref: list[Trajectory] = generator.generate_trajectories.remote(
+        prompts_batch[0], verbose=verbose, profile=profile
+    )
+    transfer_ref = None
+    for step in range(num_steps - 1):
+        loss_ref = learner.update_policy.remote(
+            trajs_ref, verbose=verbose, profile=profile
+        )
+        # Generate new trajectories for next step
+        # Second rollout does not wait
+        # Third rollout waits for first update and transfer
+        trajs_ref = generator.generate_trajectories.remote(
+            prompts[step + 1],
+            verbose=verbose,
+            profile=profile,
+            transfer_ref=transfer_ref,
+        )
+        # Sync weights
+        # Wait for update to complete
+        weights_ref = learner.get_weights.remote(loss_ref)
+        transfer_ref = generator.set_weights.remote(weights_ref)
+    # Final step
+    loss_ref = learner.update_policy.remote(trajs_ref, verbose=verbose, profile=profile)
+    final_loss = ray.get(loss_ref)
+    return final_loss
 
 
-def run_once(num_steps: int = 3):
+def run_training(
+    keywords_file: str,
+    train_val_kw_dir: str,
+    ckpt_file: str,
+    result_dir: str,
+    num_steps: int = 10,
+    num_workers: int = 2,
+    prompts_per_batch: int = 32,
+    num_val_prompts: int = 32,
+    verbose: bool = False,
+    profile: bool = False,
+) -> None:
+    """
+    Run colocated GRPO training with text generation.
+
+    Args:
+        keywords_file (str): Path to keywords file.
+        ckpt_file (str): Path to model checkpoint.
+        result_dir (str): Directory to save results.
+        num_steps (int): Number of training steps to perform.
+        num_workers (int): Number of colocated workers to use.
+        prompts_per_batch (int): Number of prompts per training batch.
+        num_val_prompts (int): Number of validation prompts.
+        verbose (bool): Whether to enable verbose logging.
+        profile (bool): Whether to enable profiling.
+    """
+    if num_workers != 2:
+        raise ValueError("Only supports 2 workers for disaggregated training")
+    if prompts_per_batch <= 0 or num_val_prompts <= 0:
+        raise ValueError("prompts_per_batch and num_val_prompts must be positive")
+
+    keywords_train, _ = split_keywords(
+        train_val_kw_dir,
+        keywords_file,
+        prompts_per_batch,
+        num_val_prompts,
+    )
+
+    # Create workers
+    generator: Generator = GeneratorWorker.remote(ckpt_file=ckpt_file)
+    learner: Learner = LearnerWorker.remote(ckpt_file=ckpt_file)
+
+    set_seed()
+    num_warmup_steps = 2 if profile else 0
+    train_args = dict(
+        generator=generator,
+        learner=learner,
+        keywords=keywords_train,
+        prompts_per_batch=prompts_per_batch,
+        profile=profile,
+        verbose=verbose,
+    )
+    warmup_loss = train_disaggregated(
+        num_steps=num_warmup_steps,
+        **train_args,
+    )
+    loss = train_disaggregated(
+        num_steps=num_steps,
+        **train_args,
+    )
+    print(f"Warmup loss: {warmup_loss}, Final loss: {loss}")
+
+    # Get final statistics
+    ray.get(learner.export_learner_stats.remote(result_dir))
+
+
+def run_once(
+    keywords_file: str,
+    train_val_kw_dir: str,
+    ckpt_file: str,
+    result_dir: str,
+    num_steps: int = 10,
+    num_workers: int = 2,
+    prompts_per_batch: int = 32,
+    num_val_prompts: int = 32,
+    verbose: bool = False,
+    profile: bool = False,
+) -> None:
     """Entry point for training."""
-    run_training(num_steps)
-
+    run_training(
+        keywords_file=keywords_file,
+        train_val_kw_dir=train_val_kw_dir,
+        ckpt_file=ckpt_file,
+        result_dir=result_dir,
+        num_steps=num_steps,
+        num_workers=num_workers,
+        prompts_per_batch=prompts_per_batch,
+        num_val_prompts=num_val_prompts,
+        verbose=verbose,
+        profile=profile,
+    )
 
 
 # ===================== Entry point =====================
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--steps", type=int, default=3)
+    parser.add_argument(
+        "--keywords_file", type=str, required=True, help="Path to keywords file"
+    )
+    parser.add_argument(
+        "--train_val_kw_split_dir",
+        type=str,
+        required=True,
+        help="Directory for train/val keyword split",
+    )
+    parser.add_argument(
+        "--ckpt_file", type=str, required=True, help="Path to model checkpoint"
+    )
+    parser.add_argument(
+        "--result_dir", type=str, required=True, help="Directory to save results"
+    )
+
+    parser.add_argument(
+        "--steps", type=int, default=N_GRPO_STEPS, help="Number of training steps"
+    )
+    parser.add_argument(
+        "--workers", type=int, default=2, help="Number of colocated workers"
+    )
+    parser.add_argument(
+        "--prompts_per_batch", type=int, default=32, help="Number of prompts per batch"
+    )
+    parser.add_argument(
+        "--num_val_prompts", type=int, default=32, help="Number of validation prompts"
+    )
+    parser.add_argument("--profile", action="store_true", help="Profiling flag")
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
     args = parser.parse_args()
 
-    ray.init(ignore_reinit_error=True)
-    run_once(num_steps=args.steps)
+    def log(msg: str) -> None:
+        if args.verbose:
+            print(msg)
+
+    log(f"Args: {args}.")
+
+    ray.init(
+        runtime_env={
+            "excludes": [
+                ".git/**",  # git metadata and objects
+                ".venv/**",  # virtual environment
+                "tests/fixtures/**",  # test fixtures (large model files)
+                "*.nsys-rep",  # profiling files
+                # "*.pt",
+                # "*.pth",
+                # "*.safetensors",  # model weight files
+                "*.tar",
+                "*.zip",
+                "*.gz",  # archives
+                "__pycache__/**",  # Python cache
+                "*.egg-info/**",  # package info
+            ]
+        },
+        _temp_dir="/homes/iws/yhruan22/raytmp",
+        ignore_reinit_error=True,
+    )
+    log("Ray initialized.")
+
+    try:
+        run_once(
+            keywords_file=args.keywords_file,
+            train_val_kw_dir=args.train_val_kw_split_dir,
+            ckpt_file=args.ckpt_file,
+            result_dir=args.result_dir,
+            num_steps=args.steps,
+            num_workers=args.workers,
+            prompts_per_batch=args.prompts_per_batch,
+            num_val_prompts=args.num_val_prompts,
+            verbose=args.verbose,
+            profile=args.profile,
+        )
+        log("Training completed.")
+    finally:
+        ray.shutdown()
+        log("Ray shutdown.")

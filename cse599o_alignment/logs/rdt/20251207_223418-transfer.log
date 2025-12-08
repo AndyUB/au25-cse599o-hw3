@@ -1,0 +1,59 @@
+Args: Namespace(ckpt_file='cse599o_alignment/ckpt/model.pt', result_dir='cse599o_alignment/results/rdt/20251207_223418/transfer_only', steps=10, warmup_steps=3, verbose=True).
+2025-12-07 22:34:29,807	INFO worker.py:2012 -- Started a local Ray instance.
+2025-12-07 22:34:30,279	INFO packaging.py:588 -- Creating a file package for local module '/homes/iws/yhruan22/au25-cse599o-hw3'.
+2025-12-07 22:34:30,405	WARNING packaging.py:430 -- File /homes/iws/yhruan22/au25-cse599o-hw3/cse599o_alignment/ckpt/model.pt is very large (243.85MiB). Consider adding this file to the 'excludes' list to skip uploading it: `ray.init(..., runtime_env={'excludes': ['/homes/iws/yhruan22/au25-cse599o-hw3/cse599o_alignment/ckpt/model.pt']})`
+2025-12-07 22:34:32,865	INFO packaging.py:380 -- Pushing file package 'gcs://_ray_pkg_454f5516aeafe2c9.zip' (245.68MiB) to Ray cluster...
+2025-12-07 22:34:33,861	INFO packaging.py:393 -- Successfully pushed file package 'gcs://_ray_pkg_454f5516aeafe2c9.zip'.
+/homes/iws/yhruan22/au25-cse599o-hw3/.venv/lib64/python3.12/site-packages/ray/_private/worker.py:2051: FutureWarning: Tip: In future versions of Ray, Ray will no longer override accelerator visible devices env var if num_gpus=0 or num_gpus=None (default). To enable this behavior and turn off this error message, set RAY_ACCEL_ENV_VAR_OVERRIDE_ON_ZERO=0
+  warnings.warn(
+Ray initialized.
+[33m(raylet)[0m warning: `VIRTUAL_ENV=/homes/iws/yhruan22/au25-cse599o-hw3/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+[33m(raylet)[0m Using CPython 3.12.9 interpreter at: /usr/bin/python3
+[33m(raylet)[0m Creating virtual environment at: .venv
+[33m(raylet)[0m    Building alignment @ file:///homes/iws/yhruan22/raytmp/session_2025-12-07_22-34-24_975534_3171816/runtime_resources/working_dir_files/_ray_pkg_454f5516aeafe2c9
+[33m(raylet)[0m    Building cse599o-basics @ file:///homes/iws/yhruan22/raytmp/session_2025-12-07_22-34-24_975534_3171816/runtime_resources/working_dir_files/_ray_pkg_454f5516aeafe2c9/cse599o-basics
+[33m(raylet)[0m       Built cse599o-basics @ file:///homes/iws/yhruan22/raytmp/session_2025-12-07_22-34-24_975534_3171816/runtime_resources/working_dir_files/_ray_pkg_454f5516aeafe2c9/cse599o-basics
+[33m(raylet)[0m       Built alignment @ file:///homes/iws/yhruan22/raytmp/session_2025-12-07_22-34-24_975534_3171816/runtime_resources/working_dir_files/_ray_pkg_454f5516aeafe2c9
+[33m(raylet)[0m Installed 205 packages in 5.41s
+[33m(raylet)[0m warning: `VIRTUAL_ENV=/homes/iws/yhruan22/au25-cse599o-hw3/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+[36m(pid=gcs_server)[0m [2025-12-07 22:34:55,699 E 3172342 3172342] (gcs_server) gcs_server.cc:302: Failed to establish connection to the event+metrics exporter agent. Events and metrics will not be exported. Exporter agent status: RpcError: Running out of retries to initialize the metrics agent. rpc_code: 14
+[33m(raylet)[0m [2025-12-07 22:34:59,175 E 3172641 3172641] (raylet) main.cc:975: Failed to establish connection to the metrics exporter agent. Metrics will not be exported. Exporter agent status: RpcError: Running out of retries to initialize the metrics agent. rpc_code: 14
+[36m(pid=3173095)[0m [2025-12-07 22:35:04,636 E 3173095 3174147] core_worker_process.cc:825: Failed to establish connection to the metrics exporter agent. Metrics will not be exported. Exporter agent status: RpcError: Running out of retries to initialize the metrics agent. rpc_code: 14
+[2025-12-07 22:35:04,774 E 3171816 3173070] core_worker_process.cc:825: Failed to establish connection to the metrics exporter agent. Metrics will not be exported. Exporter agent status: RpcError: Running out of retries to initialize the metrics agent. rpc_code: 14
+[33m(raylet)[0m It looks like you're creating a detached actor in an anonymous namespace. In order to access this actor in the future, you will need to explicitly connect to this namespace with ray.init(namespace="caddcc71-6275-4f76-bde7-16370a57c77c", ...)
+[33m(raylet)[0m warning: `VIRTUAL_ENV=/homes/iws/yhruan22/au25-cse599o-hw3/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+[36m(pid=3173108)[0m [2025-12-07 22:35:04,727 E 3173108 3175333] core_worker_process.cc:825: Failed to establish connection to the metrics exporter agent. Metrics will not be exported. Exporter agent status: RpcError: Running out of retries to initialize the metrics agent. rpc_code: 14[32m [repeated 37x across cluster] (Ray deduplicates logs by default. Set RAY_DEDUP_LOGS=0 to disable log deduplication, or see https://docs.ray.io/en/master/ray-observability/user-guides/configure-logging.html#log-deduplication for more options.)[0m
+(RDT=True) Time: 2.5246 seconds
+(RDT=True) Time: 0.0207 seconds
+(RDT=True) Time: 0.0242 seconds
+(RDT) Warmup completed. Starting benchmark...
+(RDT=True) Time: 0.0082 seconds
+(RDT=True) Time: 0.0180 seconds
+(RDT=True) Time: 0.0161 seconds
+(RDT=True) Time: 0.0087 seconds
+(RDT=True) Time: 0.1579 seconds
+(RDT=True) Time: 0.0096 seconds
+(RDT=True) Time: 0.0084 seconds
+(RDT=True) Time: 0.0084 seconds
+(RDT=True) Time: 0.1168 seconds
+(RDT=True) Time: 0.0095 seconds
+(RDT=False) Time: 0.4804 seconds
+(RDT=False) Time: 0.2664 seconds
+(RDT=False) Time: 0.4185 seconds
+(No RDT) Warmup completed. Starting benchmark...
+(RDT=False) Time: 0.3572 seconds
+(RDT=False) Time: 0.3128 seconds
+(RDT=False) Time: 0.3766 seconds
+(RDT=False) Time: 0.2808 seconds
+(RDT=False) Time: 0.1487 seconds
+(RDT=False) Time: 0.1471 seconds
+(RDT=False) Time: 0.2195 seconds
+(RDT=False) Time: 0.2327 seconds
+(RDT=False) Time: 0.1770 seconds
+(RDT=False) Time: 0.1946 seconds
+RDT: 0.0362 ± 0.0515 seconds per transfer
+No RDT: 0.2447 ± 0.0791 seconds per transfer
+Speedup: 6.77x
+Training completed.
+[36m(GeneratorWorker pid=3176028)[0m [2025-12-07 22:35:21,063 E 3176028 3176206] core_worker_process.cc:825: Failed to establish connection to the metrics exporter agent. Metrics will not be exported. Exporter agent status: RpcError: Running out of retries to initialize the metrics agent. rpc_code: 14[32m [repeated 2x across cluster][0m
+Ray shutdown.
